@@ -218,15 +218,28 @@ public class Modes<ParentT> : IDisposable where ParentT : new()
     /// <returns>创建的状态实例</returns>
     public ModeT Create<ModeT>(int id, Func<ModeT> factory) where ModeT : IMode<ParentT>
     {
+        if (factory == null)
+            throw new ArgumentNullException(nameof(factory));
+
+        if (m_modes.ContainsKey(id))
+            throw new InvalidOperationException($"状态ID {id} 已存在");
+
         // 通过DI容器或工厂创建实例
         ModeT newMode = m_serviceProvider != null
             ? (ModeT)m_serviceProvider.GetService(typeof(ModeT)) ?? factory()
             : factory();
 
+        if (newMode == null)
+            throw new InvalidOperationException($"无法创建状态类型 {typeof(ModeT).Name}");
+
         // 初始化状态
         m_modes.Add(id, newMode);
         newMode.SetParent(m_parent);
         newMode.Init();
+
+        // 更新大小
+        if (id >= m_size)
+            m_size = id + 1;
 
         return newMode;
     }
@@ -347,12 +360,17 @@ public class Modes<ParentT> : IDisposable where ParentT : new()
             m_history.Push(m_previous);
             if (m_history.Count > m_historyLimit)
             {
-                // 保持历史记录不超过限制
-                var newHistory = new Stack<int>(m_history.Take(m_historyLimit));
-                m_history.Clear();
-                foreach (var item in newHistory.Reverse())
+                // 保持历史记录不超过限制 - 创建新的栈来移除最旧的元素
+                var tempArray = new int[m_historyLimit];
+                for (int i = 0; i < m_historyLimit && m_history.Count > 0; i++)
                 {
-                    m_history.Push(item);
+                    tempArray[i] = m_history.Pop();
+                }
+                
+                m_history.Clear();
+                for (int i = m_historyLimit - 1; i >= 0; i--)
+                {
+                    m_history.Push(tempArray[i]);
                 }
             }
         }
@@ -469,11 +487,16 @@ public class Modes<ParentT> : IDisposable where ParentT : new()
                 // 限制历史记录数量
                 if (m_history.Count > m_historyLimit)
                 {
-                    var limitedHistory = new Stack<int>(m_history.Take(m_historyLimit));
-                    m_history.Clear();
-                    foreach (var item in limitedHistory.Reverse())
+                    var tempArray = new int[m_historyLimit];
+                    for (int i = 0; i < m_historyLimit && m_history.Count > 0; i++)
                     {
-                        m_history.Push(item);
+                        tempArray[i] = m_history.Pop();
+                    }
+                    
+                    m_history.Clear();
+                    for (int i = m_historyLimit - 1; i >= 0; i--)
+                    {
+                        m_history.Push(tempArray[i]);
                     }
                 }
             }
@@ -549,8 +572,7 @@ public class Modes<ParentT> : IDisposable where ParentT : new()
         {
             if (i != m_active && (!keepHistory || !m_history.Contains(i)))
             {
-                var mode = GetMode(i, false);
-                if (mode != null && m_lazyModeFactories.ContainsKey(i))
+                if (m_modes.TryGetValue(i, out var mode) && mode != null && m_lazyModeFactories.ContainsKey(i))
                 {
                     m_modePool.Return(mode);
                     m_modes[i] = null;
@@ -726,11 +748,17 @@ public class Modes<ParentT> : IDisposable where ParentT : new()
         // 延迟加载处理
         if (m_lazyModeFactories.TryGetValue(index, out var modeFactoryParent) && createIfLazy)
         {
-            var mode = m_modePool.Get(modeFactoryParent.GetType(), () => modeFactoryParent.Factory());
-            mode.SetParent(m_parent);
-            mode.Init();
-            m_modes[index] = mode;
-            return mode;
+            var factory = modeFactoryParent.Factory;
+            var newMode = factory();
+            
+            if (newMode != null)
+            {
+                newMode.SetParent(m_parent);
+                newMode.Init();
+                m_modes[index] = newMode;
+            }
+            
+            return newMode;
         }
 
         return null;
@@ -741,7 +769,7 @@ public class Modes<ParentT> : IDisposable where ParentT : new()
     /// </summary>
     private void CheckAndStartMode(IMode<ParentT> mode)
     {
-        if (m_started != m_active)
+        if (mode != null && m_started != m_active)
         {
             m_started = m_active;
             mode.Start();

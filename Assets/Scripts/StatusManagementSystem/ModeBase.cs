@@ -28,7 +28,7 @@ public abstract class ModeBase<ParentT> : IMode<ParentT>
     /// </summary>
     public void SetParent(ParentT parent)
     {
-        if (m_parent == null)
+        if (m_parent == null && parent != null)
         {
             m_parent = parent;
         }
