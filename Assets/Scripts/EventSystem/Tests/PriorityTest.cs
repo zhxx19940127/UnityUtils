@@ -8,8 +8,7 @@ using UnityEngine;
 /// </summary>
 public class PriorityTest : MonoBehaviour
 {
-    [Header("测试设置")]
-    public bool runTestOnStart = true;
+    [Header("测试设置")] public bool runTestOnStart = true;
 
     private List<string> executionOrder = new List<string>();
 
@@ -36,8 +35,7 @@ public class PriorityTest : MonoBehaviour
 
         // 发送测试消息
         var testData = new EventTest.TestData(100, "优先级测试");
-        Message.DefaultEvent.Post(testData);
-        //Message.DefaultEvent.Post("TestEvent", testData);
+        Message.DefaultEvent.Post("TestEvent", testData);
         // 输出执行顺序
         Debug.Log("事件执行顺序：");
         for (int i = 0; i < executionOrder.Count; i++)
