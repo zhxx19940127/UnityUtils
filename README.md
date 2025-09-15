@@ -28,7 +28,7 @@ UnityUtils 是一套面向 Unity 引擎开发者的高效实用工具集，旨�
 - **FileUtils 文件工具类**：封装常用文件操作
 - **UIUtils UI 工具类**：简化 UI 各类操作，包括显示、动画、交互等
 - **DebugLogger 调试工具类**：统一调试日志输出，支持详细日志与异常捕捉
-- **RandomUtils、MathUtils、GameObjectUtils、CoroutineUtils**：常用数学运算、随机数生成、游戏对象管理、协程辅助等
+- **RandomUtils、MathUtils、GameObjectUtils、**：常用数学运算、随机数生成、游戏对象管理 等
 
 ## 目录结构预览
 
