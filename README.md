@@ -1,6 +1,6 @@
 # UnityUtils 项目简介
 
-UnityUtils 是一套面向 Unity 引擎开发者的高效实用工具集，旨在提升开发效率、规范项目结构、简化常见功能实现。项目包含大量常用静态工具方法、模块化架构、状态机和高级协程管理系统，适用于中大型 Unity 项目快速集成与扩展。
+UnityUtils 是一套面向 Unity 引擎开发者的高效实用工具集，旨在提升开发效率、规范项目结构、简化常见功能实现。项目包含大量常用静态工具方法、组件化设计、状态机与协程管理等模块，适用于各类游戏及应用开发场景。
 
 ## 协程管理与策略工具（CoroutineManager）
 
@@ -15,7 +15,21 @@ UnityUtils 是一套面向 Unity 引擎开发者的高效实用工具集，旨�
 - 内置调试与性能监控工具，便于开发、测试与维护
 - 适合角色AI、流程状态、UI状态等多种场景
 
-## 常用工具（Utils）
+## 流式加载器(StreamingAssetsLoader)
+
+流式加载器（StreamingAssetsLoader）是一个针对 Unity 项目 StreamingAssets 目录的资源加载工具。
+- 支持同步与异步加载 StreamingAssets 目录下的文件和数据
+- 兼容各主流平台（如 Windows、Android、iOS 等）
+- 封装了常用的字节流、文本、JSON 等加载方式，简化资源获取流程
+
+## 计时器(TimerManager)
+
+计时器（TimerManager）提供高效灵活的计时器及定时任务管理功能。
+- 支持单次/循环定时回调、倒计时、延时执行等
+- 支持任务动态暂停、恢复、移除、查询剩余时间
+- 性能优良，适合用于 UI 倒计时、技能冷却、动画延迟、定时触发等场景
+
+## 常用工具
 
 - **TweenUtils 补间动画工具类**：实现对象属性的平滑过渡
 - **CollisionUtils 碰撞检测工具类**：提供各种碰撞检测算法，便于物理相关开发
@@ -28,7 +42,7 @@ UnityUtils 是一套面向 Unity 引擎开发者的高效实用工具集，旨�
 - **FileUtils 文件工具类**：封装常用文件操作
 - **UIUtils UI 工具类**：简化 UI 各类操作，包括显示、动画、交互等
 - **DebugLogger 调试工具类**：统一调试日志输出，支持详细日志与异常捕捉
-- **RandomUtils、MathUtils、GameObjectUtils、**：常用数学运算、随机数生成、游戏对象管理 等
+- **RandomUtils、MathUtils、GameObjectUtils**：常用数学运算、随机数生成、游戏对象管理等
 
 ## 目录结构预览
 
@@ -37,12 +51,14 @@ Assets/Scripts/
   ├─ Base/                   # 基础架构与单例模板
   ├─ Utils/                  # 常用工具类（动画、碰撞、路径、图片、UI等）
   ├─ CoroutineManager/       # 协程管理与策略工具
-  └─ StatusManagementSystem/ # 状态管理系统相关
+  ├─ StatusManagementSystem/ # 状态管理系统相关
+  ├─ StreamingAssetsLoader/  # 流式加载器相关
+  └─ TimerManager/           # 计时器相关
 ```
 
 ## 使用方式
 
-直接将本工具集源码引入你的项目，在 C# 脚本中按需静态调用相关类和方法即可。详细 API 及用法请参考各工具类源码及注释。
+直接将本工具集源码引入你的项目，在 C# 脚本中按需静态调用相关类和方法即可。详细 API 及用法请参考各工具类源码及注释。  
 本工程几乎纯代码,可以选择需要的工具添加到您的工程当中.
 
 ----
