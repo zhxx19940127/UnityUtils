@@ -96,18 +96,6 @@ public class Message : IEventBus, IDisposable
     /// </summary>
     private readonly object _typeTagLock = new object();
 
-    /// <summary>
-    /// 消息过滤列表，用于编辑器下的日志过滤
-    /// </summary>
-    private List<string> _filterate = new List<string>();
-
-#if UNITY_EDITOR
-    /// <summary>
-    /// 编辑器下的初始化标志
-    /// </summary>
-    private bool _isInit = false;
-#endif
-
     #endregion
 
     #region 构造函数
@@ -174,12 +162,6 @@ public class Message : IEventBus, IDisposable
     /// </summary>
     public void Post(string tag, params object[] parameters)
     {
-#if UNITY_EDITOR
-        // 编辑器下的过滤器初始化和日志
-        InitializeEditorFilter();
-        LogMessageIfNotFiltered(tag);
-#endif
-
         // 拦截器检查
         if (!_interceptorManager.ShouldProcessMessage(tag, parameters))
         {
@@ -308,99 +290,109 @@ public class Message : IEventBus, IDisposable
     /// <summary>
     /// 手动注册无参数方法
     /// </summary>
-    public void Register<T>(T instance, Action method, string tag) where T : class
+    public void Register<T>(T instance, Action method, string tag, int priority = 0,
+        SubscriberLogLevel logLevel = SubscriberLogLevel.All) where T : class
     {
         ValidateMethodParameters(method.Method, 0, tag);
-        var messageEvent = new MessageEvent(o => method(), instance, tag);
+        var messageEvent = new MessageEvent(o => method(), instance, tag, priority, logLevel);
         _eventRegistry.RegisterEvent(messageEvent);
     }
 
     /// <summary>
     /// 手动注册1个参数的方法
     /// </summary>
-    public void Register<T, P>(T instance, Action<P> method, string tag) where T : class
+    public void Register<T, P>(T instance, Action<P> method, string tag, int priority = 0,
+        SubscriberLogLevel logLevel = SubscriberLogLevel.All) where T : class
     {
         ValidateMethodParameters(method.Method, 1, tag);
-        var messageEvent = new MessageEvent(o => method((P)(o as object[])[0]), instance, tag);
+        var messageEvent = new MessageEvent(o => method((P)(o as object[])[0]), instance, tag, priority, logLevel);
         _eventRegistry.RegisterEvent(messageEvent);
     }
 
     /// <summary>
     /// 手动注册2个参数的方法
     /// </summary>
-    public void Register<T, P, P2>(T instance, Action<P, P2> method, string tag) where T : class
+    public void Register<T, P, P2>(T instance, Action<P, P2> method, string tag, int priority = 0,
+        SubscriberLogLevel logLevel = SubscriberLogLevel.All) where T : class
     {
         ValidateMethodParameters(method.Method, 2, tag);
         var messageEvent = new MessageEvent(o =>
         {
             var paras = o as object[];
             method((P)paras[0], (P2)paras[1]);
-        }, instance, tag);
+        }, instance, tag, priority, logLevel);
         _eventRegistry.RegisterEvent(messageEvent);
     }
 
     /// <summary>
     /// 手动注册3个参数的方法
     /// </summary>
-    public void Register<T, P, P2, P3>(T instance, Action<P, P2, P3> method, string tag) where T : class
+    public void Register<T, P, P2, P3>(T instance, Action<P, P2, P3> method, string tag, int priority = 0,
+        SubscriberLogLevel logLevel = SubscriberLogLevel.All) where T : class
     {
         ValidateMethodParameters(method.Method, 3, tag);
         var messageEvent = new MessageEvent(o =>
         {
             var paras = o as object[];
             method((P)paras[0], (P2)paras[1], (P3)paras[2]);
-        }, instance, tag);
+        }, instance, tag, priority, logLevel);
         _eventRegistry.RegisterEvent(messageEvent);
     }
 
     /// <summary>
     /// 手动注册4个参数的方法
     /// </summary>
-    public void Register<T, P, P2, P3, P4>(T instance, Action<P, P2, P3, P4> method, string tag) where T : class
+    public void Register<T, P, P2, P3, P4>(T instance, Action<P, P2, P3, P4> method, string tag, int priority = 0,
+        SubscriberLogLevel logLevel = SubscriberLogLevel.All) where T : class
     {
         ValidateMethodParameters(method.Method, 4, tag);
         var messageEvent = new MessageEvent(o =>
         {
             var paras = o as object[];
             method((P)paras[0], (P2)paras[1], (P3)paras[2], (P4)paras[3]);
-        }, instance, tag);
+        }, instance, tag, priority, logLevel);
         _eventRegistry.RegisterEvent(messageEvent);
     }
 
     /// <summary>
     /// 手动注册5个参数的方法
     /// </summary>
-    public void Register<T, P, P2, P3, P4, P5>(T instance, Action<P, P2, P3, P4, P5> method, string tag) where T : class
+    public void Register<T, P, P2, P3, P4, P5>(T instance, Action<P, P2, P3, P4, P5> method, string tag,
+        int priority = 0,
+        SubscriberLogLevel logLevel = SubscriberLogLevel.All) where T : class
     {
         ValidateMethodParameters(method.Method, 5, tag);
         var messageEvent = new MessageEvent(o =>
         {
             var paras = o as object[];
             method((P)paras[0], (P2)paras[1], (P3)paras[2], (P4)paras[3], (P5)paras[4]);
-        }, instance, tag);
+        }, instance, tag, priority, logLevel);
         _eventRegistry.RegisterEvent(messageEvent);
     }
 
     /// <summary>
     /// 类型安全的消息注册
     /// </summary>
-    public void Register<TInstance, TMessage>(TInstance instance, Action<TMessage> handler)
+    public void Register<TInstance, TMessage>(TInstance instance, Action<TMessage> handler, int priority = 0,
+        SubscriberLogLevel logLevel = SubscriberLogLevel.All)
         where TInstance : class
         where TMessage : class, IMessageData
     {
         var tag = GetTypeTag<TMessage>();
-        Register(instance, handler, tag);
+        Register(instance, handler, tag, priority, logLevel);
     }
 
     /// <summary>
     /// 类型安全的消息注册，带返回值
     /// </summary>
-    public void Register<TInstance, TMessage, TResult>(TInstance instance, Func<TMessage, TResult> handler)
+    public void Register<TInstance, TMessage, TResult>(TInstance instance, Func<TMessage, TResult> handler,
+        int priority = 0,
+        SubscriberLogLevel logLevel = SubscriberLogLevel.All)
         where TInstance : class
         where TMessage : class, IMessageData
     {
         var tag = GetTypeTag<TMessage>();
-        var messageEvent = new MessageEvent(msg => handler((TMessage)msg), instance, tag);
+        var messageEvent = new MessageEvent(msg => handler((TMessage)msg), instance, tag, priority, logLevel);
         _eventRegistry.RegisterEvent(messageEvent);
     }
 
@@ -557,32 +549,6 @@ public class Message : IEventBus, IDisposable
                            $"Expected: {expectedParamCount}, Actual: {method.GetParameters().Length}");
         }
     }
-
-#if UNITY_EDITOR
-    /// <summary>
-    /// 初始化编辑器过滤器（仅编辑器模式）
-    /// </summary>
-    private void InitializeEditorFilter()
-    {
-        if (!_isInit)
-        {
-            var list = MessageHelper.GetFilterMessageName();
-            _filterate.AddRange(list);
-            _isInit = true;
-        }
-    }
-
-    /// <summary>
-    /// 记录未过滤的消息日志（仅编辑器模式）
-    /// </summary>
-    private void LogMessageIfNotFiltered(string tag)
-    {
-        if (!_filterate.Contains(tag))
-        {
-            Debug.Log($"PostMessage====>: {tag}");
-        }
-    }
-#endif
 
     #endregion
 

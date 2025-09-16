@@ -191,7 +191,6 @@ namespace EventSystem.Core
         void ClearQueue();
 
         #endregion
-
     }
 
     /// <summary>
@@ -237,6 +236,29 @@ namespace EventSystem.Core
 
         #endregion
     }
+
+
+    /// <summary>
+    ///  消息数据接口 - 用于类型安全的消息传递
+    /// </summary>
+    public interface IMessageData
+    {
+    }
+
+    /// <summary>
+    /// 消息拦截器接口
+    /// </summary>
+    public interface IMessageInterceptor
+    {
+        /// <summary>
+        /// 判断是否应该处理该消息
+        /// </summary>
+        /// <param name="tag">消息标签</param>
+        /// <param name="parameters">消息参数</param>
+        /// <returns>true表示继续处理，false表示拦截</returns>
+        bool ShouldProcess(string tag, object[] parameters);
+    }
+
 
 #if UNITY_EDITOR
     /// <summary>

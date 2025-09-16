@@ -52,21 +52,42 @@ namespace EventSystem.Core
         /// <summary>
         /// 手动注册指定方法
         /// </summary>
-        void Register<T>(T instance, Action method, string tag) where T : class;
-        void Register<T, P>(T instance, Action<P> method, string tag) where T : class;
-        void Register<T, P, P2>(T instance, Action<P, P2> method, string tag) where T : class;
-        void Register<T, P, P2, P3>(T instance, Action<P, P2, P3> method, string tag) where T : class;
-        void Register<T, P, P2, P3, P4>(T instance, Action<P, P2, P3, P4> method, string tag) where T : class;
-        void Register<T, P, P2, P3, P4, P5>(T instance, Action<P, P2, P3, P4, P5> method, string tag) where T : class;
+        void Register<T>(T instance, Action method, string tag,
+            int priority = 0,
+            SubscriberLogLevel logLevel = SubscriberLogLevel.All) where T : class;
+
+        void Register<T, P>(T instance, Action<P> method, string tag,
+            int priority = 0,
+            SubscriberLogLevel logLevel = SubscriberLogLevel.All) where T : class;
+
+        void Register<T, P, P2>(T instance, Action<P, P2> method, string tag,
+            int priority = 0,
+            SubscriberLogLevel logLevel = SubscriberLogLevel.All) where T : class;
+
+        void Register<T, P, P2, P3>(T instance, Action<P, P2, P3> method, string tag,
+            int priority = 0,
+            SubscriberLogLevel logLevel = SubscriberLogLevel.All) where T : class;
+
+        void Register<T, P, P2, P3, P4>(T instance, Action<P, P2, P3, P4> method, string tag,
+            int priority = 0,
+            SubscriberLogLevel logLevel = SubscriberLogLevel.All) where T : class;
+
+        void Register<T, P, P2, P3, P4, P5>(T instance, Action<P, P2, P3, P4, P5> method, string tag,
+            int priority = 0,
+            SubscriberLogLevel logLevel = SubscriberLogLevel.All) where T : class;
 
         /// <summary>
         /// 类型安全的消息注册
         /// </summary>
-        void Register<TInstance, TMessage>(TInstance instance, Action<TMessage> handler)
+        void Register<TInstance, TMessage>(TInstance instance, Action<TMessage> handler,
+            int priority = 0,
+            SubscriberLogLevel logLevel = SubscriberLogLevel.All)
             where TInstance : class
             where TMessage : class, IMessageData;
 
-        void Register<TInstance, TMessage, TResult>(TInstance instance, Func<TMessage, TResult> handler)
+        void Register<TInstance, TMessage, TResult>(TInstance instance, Func<TMessage, TResult> handler,
+            int priority = 0,
+            SubscriberLogLevel logLevel = SubscriberLogLevel.All)
             where TInstance : class
             where TMessage : class, IMessageData;
 
@@ -119,6 +140,7 @@ namespace EventSystem.Core
         #endregion
 
 #if UNITY_EDITOR
+
         #region 调试和统计接口（仅编辑器模式）
 
         /// <summary>
@@ -137,6 +159,7 @@ namespace EventSystem.Core
         void ClearStats();
 
         #endregion
+
 #endif
     }
 }

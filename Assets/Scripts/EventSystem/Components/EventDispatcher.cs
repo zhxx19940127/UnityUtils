@@ -80,10 +80,10 @@ namespace EventSystem.Components
                 foreach (var messageEvent in events)
                 {
                     if (messageEvent.Tag != tag) continue;
-                    
+
                     // 验证实例是否仍然有效
                     if (messageEvent.Instance == null) continue;
-                    
+
                     executeEvents.Add(messageEvent);
                 }
 
@@ -110,10 +110,11 @@ namespace EventSystem.Components
         /// <summary>
         /// 分发消息并收集返回值
         /// </summary>
-        public List<TResult> DispatchMessageWithResult<TResult>(string tag, List<MessageEvent> events, object[] parameters)
+        public List<TResult> DispatchMessageWithResult<TResult>(string tag, List<MessageEvent> events,
+            object[] parameters)
         {
             var results = new List<TResult>();
-            
+
             if (string.IsNullOrEmpty(tag) || events == null || events.Count == 0)
                 return results;
 
@@ -126,7 +127,7 @@ namespace EventSystem.Components
                     if (messageEvent.Tag != tag) continue;
                     if (messageEvent.Instance == null) continue;
                     if (!messageEvent.HasReturnValue) continue;
-                    
+
                     executeEvents.Add(messageEvent);
                 }
 
@@ -170,8 +171,17 @@ namespace EventSystem.Components
         {
             try
             {
+                // 检查是否应该记录分发日志
+                if (messageEvent.ShouldLogDispatch)
+                {
+                    var instanceName = messageEvent.Instance?.GetType().Name ?? "Unknown";
+                    var frameInfo = GetFrameInfo();
+                    LogEventExecution(
+                        $"[EventDispatcher] 分发消息: {tag} -> {instanceName} (优先级: {messageEvent.Priority})");
+                }
+
                 messageEvent.Invoke(parameters);
-                
+
 #if UNITY_EDITOR
                 // 记录统计信息
                 _statistics?.RecordMessage(tag);
@@ -194,13 +204,22 @@ namespace EventSystem.Components
         {
             try
             {
+                // 检查是否应该记录分发日志
+                if (messageEvent.ShouldLogDispatch)
+                {
+                    var instanceName = messageEvent.Instance?.GetType().Name ?? "Unknown";
+                    var frameInfo = GetFrameInfo();
+                    LogEventExecution(
+                        $"[{frameInfo}] 分发消息(带返回值): {tag} -> {instanceName} (优先级: {messageEvent.Priority})");
+                }
+
                 var result = messageEvent.InvokeWithResult(parameters);
-                
+
 #if UNITY_EDITOR
                 // 记录统计信息
                 _statistics?.RecordMessage(tag);
 #endif
-                
+
                 return result;
             }
             catch (Exception ex)
@@ -222,8 +241,8 @@ namespace EventSystem.Components
             {
                 // 记录错误日志
                 Debug.LogError($"[EventDispatcher] 执行事件时出错 - Tag: {tag}, " +
-                              $"Instance: {messageEvent.Instance?.GetType().Name}, " +
-                              $"Error: {ex.Message}");
+                               $"Instance: {messageEvent.Instance?.GetType().Name}, " +
+                               $"Error: {ex.Message}");
 
 #if UNITY_EDITOR
                 // 记录错误统计
@@ -234,6 +253,45 @@ namespace EventSystem.Components
             {
                 // 如果不启用异常处理，重新抛出异常
                 throw ex;
+            }
+        }
+
+        #endregion
+
+        #region 日志支持方法
+
+        /// <summary>
+        /// 获取帧信息（线程安全）
+        /// </summary>
+        /// <returns>帧信息字符串</returns>
+        private string GetFrameInfo()
+        {
+            try
+            {
+                // 尝试获取 Unity 帧数
+                return $"Frame:{UnityEngine.Time.frameCount}";
+            }
+            catch
+            {
+                // 如果不在主线程中，使用当前时间
+                return $"Time:{DateTime.Now:HH:mm:ss.fff}";
+            }
+        }
+
+        /// <summary>
+        /// 线程安全的事件执行日志记录
+        /// </summary>
+        /// <param name="message">日志消息</param>
+        private void LogEventExecution(string message)
+        {
+            try
+            {
+                Debug.Log(message);
+            }
+            catch
+            {
+                // 如果不在主线程中，输出到控制台
+                Console.WriteLine(message);
             }
         }
 

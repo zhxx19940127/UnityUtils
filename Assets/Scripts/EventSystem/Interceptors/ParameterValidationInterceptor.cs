@@ -1,7 +1,6 @@
 using System;
-using UnityEngine;
 using EventSystem.Core;
-
+using UnityEngine;
 namespace EventSystem.Interceptors
 {
     /// <summary>

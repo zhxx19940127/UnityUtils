@@ -96,6 +96,14 @@ namespace EventSystem.Components
                 }
 
                 tagEvents.Add(messageEvent);
+
+                // 检查是否应该记录注册日志
+                if (messageEvent.ShouldLogRegistration)
+                {
+                    var instanceName = messageEvent.Instance?.GetType().Name ?? "Unknown";
+                    SafeDebugLog(
+                        $"[EventRegistry] 注册事件: {messageEvent.Tag} -> {instanceName} (优先级: {messageEvent.Priority}) (Log级别: {messageEvent.LogLevel})");
+                }
             }
         }
 
@@ -109,6 +117,8 @@ namespace EventSystem.Components
 
             lock (_lock)
             {
+                MessageEvent removedEvent = null;
+
                 // 从标签映射中移除
                 if (_subscribeTag2Methods.TryGetValue(tag, out var tagEvents))
                 {
@@ -116,6 +126,7 @@ namespace EventSystem.Components
                     {
                         if (ReferenceEquals(tagEvents[i].Instance, instance))
                         {
+                            removedEvent = tagEvents[i]; // 保存用于日志记录
                             tagEvents.RemoveAt(i);
                             break; // 假设一个实例对同一标签只注册一次
                         }
@@ -150,6 +161,13 @@ namespace EventSystem.Components
 
                     if (instanceEvents.Count <= 0)
                         _subscribeInstance2Methods.Remove(foundKey);
+                }
+
+                // 检查是否应该记录注销日志
+                if (removedEvent != null && removedEvent.ShouldLogRegistration)
+                {
+                    var instanceName = instance.GetType().Name;
+                    SafeDebugLog($"[EventRegistry] 注销事件: {tag} -> {instanceName}");
                 }
             }
         }
@@ -201,6 +219,7 @@ namespace EventSystem.Components
                     // 返回副本，避免外部修改
                     return new List<MessageEvent>(events);
                 }
+
                 return new List<MessageEvent>();
             }
         }
@@ -222,6 +241,7 @@ namespace EventSystem.Components
                         return _subscribeInstance2Methods[key].Count > 0;
                     }
                 }
+
                 return false;
             }
         }
@@ -344,7 +364,9 @@ namespace EventSystem.Components
                         if (ValidateMethodSignature(method, tag))
                         {
                             // 使用null作为临时实例，后续会在Register时替换
-                            events.Add(new MessageEvent(method, null, tag, subscriberAttribute.Priority));
+                            var messageEvent = new MessageEvent(method, null, tag, subscriberAttribute.Priority,
+                                subscriberAttribute.LogLevel);
+                            events.Add(messageEvent);
                         }
                     }
                 }
@@ -381,6 +403,27 @@ namespace EventSystem.Components
             }
 
             return true;
+        }
+
+        #endregion
+
+        #region 日志支持方法
+
+        /// <summary>
+        /// 线程安全的 Debug.Log
+        /// </summary>
+        /// <param name="message">日志消息</param>
+        private void SafeDebugLog(string message)
+        {
+            try
+            {
+                Debug.Log(message);
+            }
+            catch
+            {
+                // 如果不在主线程中，输出到控制台
+                Console.WriteLine(message);
+            }
         }
 
         #endregion

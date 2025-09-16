@@ -27,7 +27,7 @@ namespace EventSystem.Components
         /// <summary>
         /// 拦截统计信息
         /// </summary>
-        private readonly Dictionary<string, InterceptorStats> _interceptorStats = 
+        private readonly Dictionary<string, InterceptorStats> _interceptorStats =
             new Dictionary<string, InterceptorStats>();
 
         #endregion
@@ -150,7 +150,7 @@ namespace EventSystem.Components
                         // 如果任何一个拦截器返回false，则停止处理
                         if (!shouldProcess)
                         {
-#if UNITY_EDITOR && DEBUG_INTERCEPTORS
+#if UNITY_EDITOR
                             Debug.Log($"[InterceptorManager] 消息被拦截 - Tag: {tag}, Interceptor: {interceptorName}");
 #endif
                             return false;
@@ -188,6 +188,7 @@ namespace EventSystem.Components
                 {
                     result.Add(wrapper.Interceptor);
                 }
+
                 return new ReadOnlyCollection<IMessageInterceptor>(result);
             }
         }
@@ -363,8 +364,9 @@ namespace EventSystem.Components
             public int BlockedCalls { get; private set; }
             public int ErrorCount { get; private set; }
             public TimeSpan TotalExecutionTime { get; private set; }
-            public TimeSpan AverageExecutionTime => TotalCalls > 0 ? 
-                new TimeSpan(TotalExecutionTime.Ticks / TotalCalls) : TimeSpan.Zero;
+
+            public TimeSpan AverageExecutionTime =>
+                TotalCalls > 0 ? new TimeSpan(TotalExecutionTime.Ticks / TotalCalls) : TimeSpan.Zero;
 
             private readonly List<Exception> _recentErrors = new List<Exception>();
             private const int MAX_RECENT_ERRORS = 5;

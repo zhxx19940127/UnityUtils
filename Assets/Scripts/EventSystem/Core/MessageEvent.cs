@@ -40,6 +40,23 @@ namespace EventSystem.Core
         /// </summary>
         public bool HasReturnValue => FuncAction != null;
 
+        /// <summary>
+        /// 日志级别（来自SubscriberAttribute）
+        /// </summary>
+        public SubscriberLogLevel LogLevel { get; set; } = SubscriberLogLevel.All;
+
+        /// <summary>
+        /// 检查是否应该记录注册/取消注册日志
+        /// </summary>
+        public bool ShouldLogRegistration =>
+            (LogLevel == SubscriberLogLevel.All || LogLevel == SubscriberLogLevel.RegistrationOnly);
+
+        /// <summary>
+        /// 检查是否应该记录消息分发日志
+        /// </summary>
+        public bool ShouldLogDispatch =>
+            (LogLevel == SubscriberLogLevel.All || LogLevel == SubscriberLogLevel.DispatchOnly);
+
         #endregion
 
         #region 构造函数
@@ -54,17 +71,20 @@ namespace EventSystem.Core
             Tag = messageEvent.Tag;
             Instance = instance;
             Priority = messageEvent.Priority;
+            LogLevel = messageEvent.LogLevel;
         }
 
         /// <summary>
         /// 反射方法构造函数
         /// </summary>
-        public MessageEvent(System.Reflection.MethodInfo methodInfo, object instance, string tag, int priority = 0)
+        public MessageEvent(System.Reflection.MethodInfo methodInfo, object instance, string tag, int priority = 0,
+            SubscriberLogLevel logLevel = SubscriberLogLevel.All)
         {
             Instance = instance;
             Tag = tag;
             Priority = priority;
-            
+            LogLevel = logLevel;
+
             // 根据方法返回值类型决定使用Action还是FuncAction
             if (methodInfo.ReturnType == typeof(void))
             {
@@ -81,25 +101,29 @@ namespace EventSystem.Core
         /// <summary>
         /// Action委托构造函数
         /// </summary>
-        public MessageEvent(Action<object> action, object instance, string tag, int priority = 0)
+        public MessageEvent(Action<object> action, object instance, string tag, int priority = 0,
+            SubscriberLogLevel logLevel = SubscriberLogLevel.All)
         {
             Action = (ins, o) => action(o);
             FuncAction = null;
             Instance = instance;
             Tag = tag;
             Priority = priority;
+            LogLevel = logLevel;
         }
 
         /// <summary>
         /// Func委托构造函数，支持返回值
         /// </summary>
-        public MessageEvent(Func<object, object> func, object instance, string tag, int priority = 0)
+        public MessageEvent(Func<object, object> func, object instance, string tag, int priority = 0,
+            SubscriberLogLevel logLevel = SubscriberLogLevel.All)
         {
             Action = null;
             FuncAction = (ins, o) => func(o);
             Instance = instance;
             Tag = tag;
             Priority = priority;
+            LogLevel = logLevel;
         }
 
         #endregion
@@ -149,10 +173,11 @@ namespace EventSystem.Core
         {
             if (obj is MessageEvent other)
             {
-                return ReferenceEquals(Instance, other.Instance) && 
-                       Tag == other.Tag && 
+                return ReferenceEquals(Instance, other.Instance) &&
+                       Tag == other.Tag &&
                        Priority == other.Priority;
             }
+
             return false;
         }
 
