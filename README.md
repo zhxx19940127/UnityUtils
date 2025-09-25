@@ -2,6 +2,18 @@
 
 UnityUtils 是一套面向 Unity 引擎开发者的高效实用工具集，旨在提升开发效率、规范项目结构、简化常见功能实现。项目包含大量常用静态工具方法、组件化设计、状态机、协程管理、事件系统等模块，适用于各类游戏及应用开发场景。
 
+
+## 反射缓存工具（ReflectionToolkit）
+
+对 反射相关的高频操作（类型查找、MethodInfo/PropertyInfo/字段/特性/委托解析等）提供预加载,缓存,清理等一些列功能,方便之后快速调用
+- 可观测：统一统计结构（命中率 / 内存使用 / 使用频率 / 清理结果）
+- 可扩展：模块化 ICacheModule，策略化 ICleanupStrategy，可插拔
+- 自适应：全局策略组合 + 模块内部 OnSmartCleanup 双层裁剪
+- 支持链式流程、进度回调、调试与性能监控等高级用法
+- 可维护：统一入口 ReflectionToolkit，分层清晰（Core / Interfaces / Modules / Strategies）
+- 可控内存：LRU / 使用频率 / 内存压力 / 定时 / 自适应 多策略叠加
+
+
 ## 协程管理与策略工具（CoroutineManager）
 
 - 支持高性能协程池化，批量管理/命名/分类/自动清理协程
