@@ -9,7 +9,6 @@ UnityUtils 是一套面向 Unity 引擎开发者的高效实用工具集，旨�
 - 可观测：统一统计结构（命中率 / 内存使用 / 使用频率 / 清理结果）
 - 可扩展：模块化 ICacheModule，策略化 ICleanupStrategy，可插拔
 - 自适应：全局策略组合 + 模块内部 OnSmartCleanup 双层裁剪
-- 支持链式流程、进度回调、调试与性能监控等高级用法
 - 可维护：统一入口 ReflectionToolkit，分层清晰（Core / Interfaces / Modules / Strategies）
 - 可控内存：LRU / 使用频率 / 内存压力 / 定时 / 自适应 多策略叠加
 
