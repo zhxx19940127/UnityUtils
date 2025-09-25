@@ -147,7 +147,7 @@ namespace GameObjectToolkit
             obj.SetActive(isActive);
             foreach (Transform child in obj.transform)
             {
-                child.gameObject.SetActiveRecursively(isActive);
+                child.gameObject.SetActive(isActive);
             }
         }
 
