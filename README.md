@@ -10,8 +10,8 @@ UnityUtils 是一套面向 Unity 引擎开发者的高效实用工具集，旨�
 - 支持 UIMark 标记导出目标：组件/RectTransform/GameObject/Auto，支持忽略子级与组件索引
 - 自动包含常用控件（Button/Toggle/Slider/InputField/TMP），可扩展包含 ScrollRect/Scrollbar/Dropdown
 - 两种“生成与赋值”模式：
-  方法赋值：生成 public void InitRefs()；把查找逻辑放入该方法，需你在合适时机手动调用
-  序列化引用：生成 [SerializeField] 字段并在编辑器中写引用（无需运行时查找）
+方法赋值：生成 public void InitRefs()；把查找逻辑放入该方法，需你在合适时机手动调用
+序列化引用：生成 [SerializeField] 字段并在编辑器中写引用（无需运行时查找）
 - 支持命名空间包装与自定义基类（默认 MonoBehaviour）
 - 统一的命名与属性生成：_camelCase、组件前缀映射、属性名去前缀（可选）
 
