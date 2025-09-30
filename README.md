@@ -3,6 +3,20 @@
 UnityUtils 是一套面向 Unity 引擎开发者的高效实用工具集，旨在提升开发效率、规范项目结构、简化常见功能实现。项目包含大量常用静态工具方法、组件化设计、状态机、协程管理、事件系统等模块，适用于各类游戏及应用开发场景。
 
 
+
+## 自动 UI 代码生成工具（UnityUtils/GeneratedUITool）
+本工具用于基于 UI 预制体自动生成访问脚本，避免手写查找与拖拽，支持单文件可重生成、序列化引用赋值、命名空间与基类包装、批量工作流等。
+- 自动生成 UI 访问脚本（单文件，重复生成仅覆盖标记段，保留 using 与用户代码）
+- 支持 UIMark 标记导出目标：组件/RectTransform/GameObject/Auto，支持忽略子级与组件索引
+- 自动包含常用控件（Button/Toggle/Slider/InputField/TMP），可扩展包含 ScrollRect/Scrollbar/Dropdown
+- 两种“生成与赋值”模式：
+  方法赋值：生成 public void InitRefs()；把查找逻辑放入该方法，需你在合适时机手动调用
+  序列化引用：生成 [SerializeField] 字段并在编辑器中写引用（无需运行时查找）
+- 支持命名空间包装与自定义基类（默认 MonoBehaviour）
+- 统一的命名与属性生成：_camelCase、组件前缀映射、属性名去前缀（可选）
+
+
+
 ## 反射缓存工具（ReflectionToolkit）
 
 对 反射相关的高频操作（类型查找、MethodInfo/PropertyInfo/字段/特性/委托解析等）提供预加载,缓存,清理等一些列功能,方便之后快速调用
