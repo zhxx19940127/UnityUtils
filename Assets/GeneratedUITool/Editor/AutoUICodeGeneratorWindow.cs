@@ -16,6 +16,10 @@ namespace UnityUtils.EditorTools.AutoUI
         private int _lastGenerateSuccess;
         private int _lastGenerateFail;
         private string _lastGenerateMessage;
+        private string _search = string.Empty;
+        private bool _filterOnlyUngenerated = false;
+    private bool _filterOnlyUnattached = false;
+    private bool _filterOnlyErrors = false;
 
         [MenuItem("Tools/UI/自动UI代码生成器")]
         public static void Open()
@@ -190,6 +194,13 @@ namespace UnityUtils.EditorTools.AutoUI
         private void DrawPrefabList(bool expand = false)
         {
             EditorGUILayout.LabelField("预制体列表", EditorStyles.boldLabel);
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                _search = EditorGUILayout.TextField(_search, GUI.skin.FindStyle("ToolbarSeachTextField") ?? GUI.skin.textField);
+                _filterOnlyUngenerated = GUILayout.Toggle(_filterOnlyUngenerated, new GUIContent("只未生成"), GUILayout.Width(80));
+                _filterOnlyUnattached = GUILayout.Toggle(_filterOnlyUnattached, new GUIContent("只未挂载"), GUILayout.Width(80));
+                _filterOnlyErrors = GUILayout.Toggle(_filterOnlyErrors, new GUIContent("只异常"), GUILayout.Width(80));
+            }
             EditorGUILayout.BeginVertical("box", GUILayout.ExpandHeight(true));
             if (expand)
                 _scroll = EditorGUILayout.BeginScrollView(_scroll, GUILayout.ExpandHeight(true));
@@ -197,14 +208,28 @@ namespace UnityUtils.EditorTools.AutoUI
                 _scroll = EditorGUILayout.BeginScrollView(_scroll);
             for (int i = 0; i < _prefabList.Count; i++)
             {
+                var go = _prefabList[i];
+                if (!string.IsNullOrEmpty(_search) && go.name.IndexOf(_search, StringComparison.OrdinalIgnoreCase) < 0)
+                    continue;
+                if (_filterOnlyUngenerated && HasGeneratedScript(go))
+                    continue;
+                if (_filterOnlyUnattached && IsAttached(go))
+                    continue;
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     _selected[i] = EditorGUILayout.Toggle(_selected[i], GUILayout.Width(20));
-                    EditorGUILayout.ObjectField(_prefabList[i], typeof(GameObject), false);
+                    EditorGUILayout.ObjectField(go, typeof(GameObject), false);
                     if (GUILayout.Button("生成脚本", GUILayout.Width(100)))
                     {
-                        UICodeGenerator.GenerateScript(_prefabList[i], _settings.scriptOutputFolder, _settings);
+                        var res = UICodeGenerator.GenerateScript(go, _settings.scriptOutputFolder, _settings);
+                        if (res.assignStats != null)
+                        {
+                            var s = res.assignStats;
+                            _lastGenerateMessage = $"赋值: 成功 {s.success}/总 {s.total}，缺路径 {s.missingPath}，缺组件 {s.missingComponent}";
+                        }
                     }
+                    if (GUILayout.Button("打开脚本", GUILayout.Width(80))) OpenScript(go);
+                    if (GUILayout.Button("定位预制", GUILayout.Width(80))) EditorGUIUtility.PingObject(go);
                 }
             }
 
@@ -249,6 +274,7 @@ namespace UnityUtils.EditorTools.AutoUI
             try
             {
                 int total = 0;
+                bool canceled = false;
                 EditorUtility.DisplayProgressBar("批量生成 UI 脚本", "开始...", 0f);
                 for (int i = 0; i < _prefabList.Count; i++)
                 {
@@ -256,14 +282,23 @@ namespace UnityUtils.EditorTools.AutoUI
                 }
 
                 int done = 0;
+                int assignOk = 0, assignTotal = 0, missingPath = 0, missingComp = 0;
                 for (int i = 0; i < _prefabList.Count; i++)
                 {
                     if (!(prefabAll || _selected[i])) continue;
                     var go = _prefabList[i];
-                    EditorUtility.DisplayProgressBar("批量生成 UI 脚本", go.name, total > 0 ? (float)done / total : 0f);
+                    canceled = EditorUtility.DisplayCancelableProgressBar("批量生成 UI 脚本", go.name, total > 0 ? (float)done / total : 0f);
+                    if (canceled) break;
                     try
                     {
-                        UICodeGenerator.GenerateScript(go, _settings.scriptOutputFolder, _settings);
+                        var res = UICodeGenerator.GenerateScript(go, _settings.scriptOutputFolder, _settings);
+                        if (res.assignStats != null)
+                        {
+                            assignOk += res.assignStats.success;
+                            assignTotal += res.assignStats.total;
+                            missingPath += res.assignStats.missingPath;
+                            missingComp += res.assignStats.missingComponent;
+                        }
                         _lastGenerateSuccess++;
                     }
                     catch (System.Exception ex)
@@ -280,6 +315,110 @@ namespace UnityUtils.EditorTools.AutoUI
                 EditorUtility.ClearProgressBar();
                 _lastGenerateMessage = $"生成完成：成功 {_lastGenerateSuccess}，失败 {_lastGenerateFail}";
             }
+        }
+
+        private static bool HasGeneratedScript(GameObject go)
+        {
+            var settings = AutoUICodeGenSettings.Ensure();
+            if (string.IsNullOrEmpty(settings.scriptOutputFolder)) return false;
+            var path = Path.Combine(settings.scriptOutputFolder, go.name + ".cs").Replace("\\", "/");
+            return File.Exists(path);
+        }
+
+        private static bool IsAttached(GameObject go)
+        {
+            var path = AssetDatabase.GetAssetPath(go);
+            if (string.IsNullOrEmpty(path)) return false;
+            var settings = AutoUICodeGenSettings.Ensure();
+            var className = go.name;
+            var prefab = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                if (prefab == null) return false;
+                var msPath = Path.Combine(settings.scriptOutputFolder, className + ".cs");
+                var ms = AssetDatabase.LoadAssetAtPath<MonoScript>(msPath);
+                var t = ms != null ? ms.GetClass() : null;
+                if (t == null) return false;
+                return prefab.GetComponent(t) != null;
+            }
+            finally
+            {
+                if (prefab != null) PrefabUtility.UnloadPrefabContents(prefab);
+            }
+        }
+
+        [MenuItem("Assets/生成UI代码(支持多选)")]
+        private static void GenerateForSelected()
+        {
+            var settings = AutoUICodeGenSettings.Ensure();
+            var selection = Selection.objects;
+            var prefabs = new List<GameObject>();
+            foreach (var obj in selection)
+            {
+                var path = AssetDatabase.GetAssetPath(obj);
+                if (string.IsNullOrEmpty(path)) continue;
+                var go = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                if (go != null) prefabs.Add(go);
+            }
+
+            if (prefabs.Count == 0)
+            {
+                EditorUtility.DisplayDialog("生成UI代码", "请选择一个或多个预制体", "确定");
+                return;
+            }
+
+            try
+            {
+                EditorUtility.DisplayProgressBar("生成UI代码", "开始...", 0f);
+                for (int i = 0; i < prefabs.Count; i++)
+                {
+                    var canceled = EditorUtility.DisplayCancelableProgressBar("生成UI代码", prefabs[i].name, (float)i / prefabs.Count);
+                    if (canceled) break;
+                    UICodeGenerator.GenerateScript(prefabs[i], settings.scriptOutputFolder, settings);
+                }
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
+            }
+        }
+
+        [MenuItem("GameObject/生成UI代码", false, 49)]
+        private static void GenerateFromHierarchy()
+        {
+            var settings = AutoUICodeGenSettings.Ensure();
+            var selection = Selection.gameObjects;
+            if (selection == null || selection.Length == 0)
+            {
+                EditorUtility.DisplayDialog("生成UI代码", "请在层级视图选择一个或多个预制体实例/Prefab 根节点", "确定");
+                return;
+            }
+            try
+            {
+                EditorUtility.DisplayProgressBar("生成UI代码", "开始...", 0f);
+                for (int i = 0; i < selection.Length; i++)
+                {
+                    var canceled = EditorUtility.DisplayCancelableProgressBar("生成UI代码", selection[i].name, (float)i / selection.Length);
+                    if (canceled) break;
+                    var prefab = PrefabUtility.GetCorrespondingObjectFromSource(selection[i]);
+                    var go = prefab != null ? prefab : selection[i];
+                    if (go != null)
+                        UICodeGenerator.GenerateScript(go, settings.scriptOutputFolder, settings);
+                }
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
+            }
+        }
+
+        private static void OpenScript(GameObject go)
+        {
+            var settings = AutoUICodeGenSettings.Ensure();
+            var path = Path.Combine(settings.scriptOutputFolder, go.name + ".cs").Replace("\\", "/");
+            var asset = AssetDatabase.LoadAssetAtPath<MonoScript>(path);
+            if (asset != null) AssetDatabase.OpenAsset(asset);
+            else EditorUtility.DisplayDialog("打开脚本", "未找到脚本: " + path, "确定");
         }
 
         private void RefreshPrefabs()

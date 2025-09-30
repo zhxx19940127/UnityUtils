@@ -10,6 +10,7 @@ public class Panel : MonoBehaviour
     private UnityEngine.UI.Button _btnButton;
     private UnityEngine.UI.RawImage _imgRawImage;
     private UnityEngine.UI.Slider _sldSlider;
+    private UnityEngine.UI.Text _txtText;
     private UnityEngine.UI.Toggle _toggle;
     // </auto-fields>
     // <auto-props>
@@ -18,6 +19,7 @@ public class Panel : MonoBehaviour
     public UnityEngine.UI.Button Button => _btnButton;
     public UnityEngine.UI.RawImage RawImage => _imgRawImage;
     public UnityEngine.UI.Slider Slider => _sldSlider;
+    public UnityEngine.UI.Text Text => _txtText;
     public UnityEngine.UI.Toggle Gle => _toggle;
     // </auto-props>
     // <auto-assign>
@@ -25,22 +27,53 @@ public class Panel : MonoBehaviour
     {
         var __tr0 = transform.Find("Text (TMP)");
         if (__tr0 == null) Debug.LogError("[AutoUI] 未找到路径: Text (TMP)");
-        else { _txtTextTMP = __tr0.GetComponent<TMPro.TMP_Text>(); if (_txtTextTMP == null) Debug.LogError("[AutoUI] 路径 Text (TMP) 缺少组件 TMPro.TMP_Text"); }
+        else {
+            var __comps = __tr0.GetComponents<TMPro.TMP_Text>();
+            _txtTextTMP = (__comps != null && __comps.Length > 0) ? __comps[0] : null;
+            if (_txtTextTMP == null) Debug.LogError("[AutoUI] 路径 Text (TMP) 未找到索引 0 的组件 TMPro.TMP_Text");
+        }
         var __tr1 = transform.Find("Button/Text (TMP)");
         if (__tr1 == null) Debug.LogError("[AutoUI] 未找到路径: Button/Text (TMP)");
-        else { _txtTextTMP_1 = __tr1.GetComponent<TMPro.TMP_Text>(); if (_txtTextTMP_1 == null) Debug.LogError("[AutoUI] 路径 Button/Text (TMP) 缺少组件 TMPro.TMP_Text"); }
+        else {
+            var __comps = __tr1.GetComponents<TMPro.TMP_Text>();
+            _txtTextTMP_1 = (__comps != null && __comps.Length > 0) ? __comps[0] : null;
+            if (_txtTextTMP_1 == null) Debug.LogError("[AutoUI] 路径 Button/Text (TMP) 未找到索引 0 的组件 TMPro.TMP_Text");
+        }
         var __tr2 = transform.Find("Button");
         if (__tr2 == null) Debug.LogError("[AutoUI] 未找到路径: Button");
-        else { _btnButton = __tr2.GetComponent<UnityEngine.UI.Button>(); if (_btnButton == null) Debug.LogError("[AutoUI] 路径 Button 缺少组件 UnityEngine.UI.Button"); }
+        else {
+            var __comps = __tr2.GetComponents<UnityEngine.UI.Button>();
+            _btnButton = (__comps != null && __comps.Length > 0) ? __comps[0] : null;
+            if (_btnButton == null) Debug.LogError("[AutoUI] 路径 Button 未找到索引 0 的组件 UnityEngine.UI.Button");
+        }
         var __tr3 = transform.Find("RawImage");
         if (__tr3 == null) Debug.LogError("[AutoUI] 未找到路径: RawImage");
-        else { _imgRawImage = __tr3.GetComponent<UnityEngine.UI.RawImage>(); if (_imgRawImage == null) Debug.LogError("[AutoUI] 路径 RawImage 缺少组件 UnityEngine.UI.RawImage"); }
+        else {
+            var __comps = __tr3.GetComponents<UnityEngine.UI.RawImage>();
+            _imgRawImage = (__comps != null && __comps.Length > 0) ? __comps[0] : null;
+            if (_imgRawImage == null) Debug.LogError("[AutoUI] 路径 RawImage 未找到索引 0 的组件 UnityEngine.UI.RawImage");
+        }
         var __tr4 = transform.Find("Slider");
         if (__tr4 == null) Debug.LogError("[AutoUI] 未找到路径: Slider");
-        else { _sldSlider = __tr4.GetComponent<UnityEngine.UI.Slider>(); if (_sldSlider == null) Debug.LogError("[AutoUI] 路径 Slider 缺少组件 UnityEngine.UI.Slider"); }
-        var __tr5 = transform.Find("Toggle");
-        if (__tr5 == null) Debug.LogError("[AutoUI] 未找到路径: Toggle");
-        else { _toggle = __tr5.GetComponent<UnityEngine.UI.Toggle>(); if (_toggle == null) Debug.LogError("[AutoUI] 路径 Toggle 缺少组件 UnityEngine.UI.Toggle"); }
+        else {
+            var __comps = __tr4.GetComponents<UnityEngine.UI.Slider>();
+            _sldSlider = (__comps != null && __comps.Length > 0) ? __comps[0] : null;
+            if (_sldSlider == null) Debug.LogError("[AutoUI] 路径 Slider 未找到索引 0 的组件 UnityEngine.UI.Slider");
+        }
+        var __tr5 = transform.Find("Text");
+        if (__tr5 == null) Debug.LogError("[AutoUI] 未找到路径: Text");
+        else {
+            var __comps = __tr5.GetComponents<UnityEngine.UI.Text>();
+            _txtText = (__comps != null && __comps.Length > 0) ? __comps[0] : null;
+            if (_txtText == null) Debug.LogError("[AutoUI] 路径 Text 未找到索引 0 的组件 UnityEngine.UI.Text");
+        }
+        var __tr6 = transform.Find("Toggle");
+        if (__tr6 == null) Debug.LogError("[AutoUI] 未找到路径: Toggle");
+        else {
+            var __comps = __tr6.GetComponents<UnityEngine.UI.Toggle>();
+            _toggle = (__comps != null && __comps.Length > 0) ? __comps[0] : null;
+            if (_toggle == null) Debug.LogError("[AutoUI] 路径 Toggle 未找到索引 0 的组件 UnityEngine.UI.Toggle");
+        }
     }
     // </auto-assign>
     // <user-code>

@@ -28,6 +28,9 @@ namespace UnityUtils.UI
         [Tooltip("当目标为 Component 时，使用该类型（完整限定名），如 UnityEngine.UI.Button 或 TMPro.TMP_Text")]
         public string componentTypeFullName;
 
+    [Tooltip("当同一节点上存在多个相同类型组件时，选择第几个（从 0 开始）。仅在目标为 Component 时生效。")]
+    public int componentIndex = 0;
+
         private void Reset()
         {
             // 添加组件时，自动设置字段名和推荐组件类型

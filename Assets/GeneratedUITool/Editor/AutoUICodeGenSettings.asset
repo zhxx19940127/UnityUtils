@@ -15,7 +15,7 @@ MonoBehaviour:
   prefabFolder: Assets/Resources/UI
   scriptOutputFolder: Assets/Scripts/GeneratedUI
   autoIncludeCommonControls: 1
-  assignInAwake: 1
+  initAssignMode: 0
   requireUppercaseClassName: 1
   generateReadOnlyProperties: 1
   privateFieldUnderscoreCamelCase: 1

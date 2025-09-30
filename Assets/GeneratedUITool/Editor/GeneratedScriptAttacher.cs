@@ -27,10 +27,22 @@ namespace UnityUtils.EditorTools.AutoUI
             if (!TryAttach(guid, className, scriptAssetPath))
             {
                 // 类型暂不可用，入队等待 DidReloadScripts
-                var payload = guid + "|" + className + "|" + (scriptAssetPath ?? string.Empty);
+                var item = guid + "|" + className + "|" + (scriptAssetPath ?? string.Empty);
                 var existed = SessionState.GetString(SessionKey, string.Empty);
-                if (!string.IsNullOrEmpty(existed)) payload = existed + "\n" + payload;
-                SessionState.SetString(SessionKey, payload);
+                // 去重
+                if (!string.IsNullOrEmpty(existed))
+                {
+                    var set = new System.Collections.Generic.HashSet<string>(existed.Split(new[]{'\n'}, StringSplitOptions.RemoveEmptyEntries));
+                    if (!set.Add(item)) return; // 已存在
+                    // 稳定排序：按字符串比较
+                    var arr = new System.Collections.Generic.List<string>(set);
+                    arr.Sort(StringComparer.Ordinal);
+                    SessionState.SetString(SessionKey, string.Join("\n", arr));
+                }
+                else
+                {
+                    SessionState.SetString(SessionKey, item);
+                }
             }
         }
 
