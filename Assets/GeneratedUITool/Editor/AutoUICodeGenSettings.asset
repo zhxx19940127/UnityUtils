@@ -21,7 +21,6 @@ MonoBehaviour:
   privateFieldUnderscoreCamelCase: 1
   useComponentPrefixForFields: 1
   stripPrefixInPropertyNames: 1
-  autoAddScriptToPrefab: 1
   useSerializedReferences: 0
   autoIncludeExtendedControls: 1
   logMarkerRecovery: 1

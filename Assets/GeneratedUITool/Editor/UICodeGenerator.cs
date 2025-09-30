@@ -229,11 +229,6 @@ namespace UnityUtils.EditorTools.AutoUI
                     result.fileChanged = true;
                 }
 
-                if (settings.autoAddScriptToPrefab)
-                {
-                    GeneratedScriptAttacher.EnqueueAttach(prefab, className, RelativeToProject(userPath));
-                }
-
                 if (serializedMode)
                 {
                     result.assignStats = SerializedReferenceAssigner.Assign(prefab, className, fields);
@@ -248,11 +243,6 @@ namespace UnityUtils.EditorTools.AutoUI
                 AssetDatabase.ImportAsset(RelativeToProject(userPath));
                 result.fileChanged = true;
 
-                if (settings.autoAddScriptToPrefab)
-                {
-                    GeneratedScriptAttacher.EnqueueAttach(prefab, className, RelativeToProject(userPath));
-                }
-
                 if (serializedMode)
                 {
                     result.assignStats = SerializedReferenceAssigner.Assign(prefab, className, fields);
@@ -262,6 +252,127 @@ namespace UnityUtils.EditorTools.AutoUI
             }
 
             return result;
+        }
+
+        // 提供给外部在不生成文件时收集字段（用于序列化引用赋值）
+        public static List<(string typeFullName, string name, string path, bool isComponent, int compIndex)> CollectFields(GameObject prefab, AutoUICodeGenSettings settings)
+        {
+            var fields = new List<(string typeFullName, string name, string path, bool isComponent, int compIndex)>();
+            if (prefab == null) return fields;
+
+            // 自动包含
+            if (settings.autoIncludeCommonControls)
+            {
+                foreach (var t in GetAutoIncludeTypes(settings))
+                {
+                    var comps = prefab.GetComponentsInChildren(t, true);
+                    foreach (var c in comps)
+                    {
+                        var tr = (c as Component).transform;
+                        if (IsUnderIgnoredMark(tr)) continue;
+                        var typeName = t.FullName;
+                        var fieldName = MakeSafeFieldName(tr.name, t.Name);
+                        var path = GetPath(tr, prefab.transform);
+                        int idx = 0;
+                        var all = tr.GetComponents(t);
+                        for (int k = 0; k < all.Length; k++) { if (ReferenceEquals(all[k], c)) { idx = k; break; } }
+                        fields.Add((typeName, fieldName, path, true, idx));
+                    }
+                }
+            }
+
+            // UIMark
+            var marks = prefab.GetComponentsInChildren<UIMark>(true);
+            foreach (var mark in marks)
+            {
+                if (mark == null) continue;
+                var tr = mark.transform;
+                var fieldBaseName = string.IsNullOrWhiteSpace(mark.fieldName) ? tr.name : mark.fieldName.Trim();
+                var fieldName = MakeSafeFieldName(fieldBaseName);
+                var path = GetPath(tr, prefab.transform);
+
+                switch (mark.targetKind)
+                {
+                    case UIMark.ExportTargetKind.Component:
+                    {
+                        var t = FindType(mark.componentTypeFullName);
+                        if (t == null)
+                        {
+                            AddAutoByPriority(tr.gameObject, fieldName, path, fields);
+                        }
+                        else
+                        {
+                            var comps = tr.GetComponents(t);
+                            if (comps != null && comps.Length > 0)
+                            {
+                                var idx = Mathf.Clamp(mark.componentIndex, 0, comps.Length - 1);
+                                fields.Add((t.FullName, fieldName, path, true, idx));
+                            }
+                            else
+                            {
+                                AddFallbackRectOrGO(tr, fieldName, path, fields, preferRect: true);
+                            }
+                        }
+                    }
+                        break;
+                    case UIMark.ExportTargetKind.RectTransform:
+                        fields.Add((typeof(RectTransform).FullName, fieldName, path, false, 0));
+                        break;
+                    case UIMark.ExportTargetKind.GameObject:
+                        fields.Add((typeof(GameObject).FullName, fieldName, path, false, 0));
+                        break;
+                    case UIMark.ExportTargetKind.Auto:
+                    default:
+                    {
+                        if (!AddAutoByPriority(tr.gameObject, fieldName, path, fields))
+                        {
+                            AddFallbackRectOrGO(tr, fieldName, path, fields, preferRect: true);
+                        }
+                    }
+                        break;
+                }
+            }
+
+            // 去重、排序与命名规则保持与生成一致
+            fields = fields
+                .GroupBy(f => (f.path, f.typeFullName, f.compIndex))
+                .Select(g => g.First())
+                .OrderBy(f => f.typeFullName)
+                .ThenBy(f => f.name)
+                .ToList();
+
+            if (settings.useComponentPrefixForFields)
+            {
+                for (int i = 0; i < fields.Count; i++)
+                {
+                    var f = fields[i];
+                    var prefix = GetPrefixForTypeFullName(f.typeFullName, settings);
+                    var baseName = f.name;
+                    if (!string.IsNullOrEmpty(prefix))
+                    {
+                        var lower = baseName.ToLowerInvariant();
+                        if (!(lower.StartsWith(prefix + "_") || lower.StartsWith(prefix)))
+                        {
+                            baseName = prefix + "_" + baseName;
+                        }
+                    }
+                    fields[i] = (f.typeFullName, baseName, f.path, f.isComponent, f.compIndex);
+                }
+            }
+
+            if (settings.privateFieldUnderscoreCamelCase)
+            {
+                for (int i = 0; i < fields.Count; i++)
+                {
+                    var f = fields[i];
+                    var camel = ToCamelCase(f.name);
+                    var finalName = camel.StartsWith("_") ? camel : "_" + camel;
+                    fields[i] = (f.typeFullName, finalName, f.path, f.isComponent, f.compIndex);
+                }
+            }
+
+            EnsureUniqueFieldNames(fields);
+            return fields;
         }
 
         private static string BuildClassCode(string className,

@@ -1,6 +1,4 @@
-using System;
 using System.Collections.Generic;
-using System.IO;
 using UnityEditor;
 using UnityEngine;
 
@@ -12,6 +10,8 @@ namespace UnityUtils.EditorTools.AutoUI
     /// </summary>
     public static class SerializedReferenceAssigner
     {
+        private static readonly System.Collections.Generic.Dictionary<string, AssignStats> s_lastStats = new System.Collections.Generic.Dictionary<string, AssignStats>();
+
         public class AssignStats
         {
             public int total;
@@ -28,6 +28,7 @@ namespace UnityUtils.EditorTools.AutoUI
 
             var prefabPath = AssetDatabase.GetAssetPath(prefabRoot);
             if (string.IsNullOrEmpty(prefabPath)) return stats;
+                var guid = AssetDatabase.AssetPathToGUID(prefabPath);
 
             var go = PrefabUtility.LoadPrefabContents(prefabPath);
             if (go == null) return stats;
@@ -96,12 +97,22 @@ namespace UnityUtils.EditorTools.AutoUI
 
                 so.ApplyModifiedPropertiesWithoutUndo();
                 PrefabUtility.SaveAsPrefabAsset(go, prefabPath);
+                if (stats.success > 0)
+                {
+                    PrefabUtility.SaveAsPrefabAsset(go, prefabPath);
+                }
+                s_lastStats[guid] = stats;
                 return stats;
             }
             finally
             {
                 PrefabUtility.UnloadPrefabContents(go);
             }
+        }
+
+        public static bool TryGetLastStatsByGuid(string prefabGuid, out AssignStats stats)
+        {
+            return s_lastStats.TryGetValue(prefabGuid, out stats);
         }
     }
 }

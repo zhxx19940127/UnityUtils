@@ -1,7 +1,4 @@
 using System;
-using System.IO;
-using System.Linq;
-using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEditor.Callbacks;
 using UnityEngine;
@@ -14,7 +11,8 @@ namespace UnityUtils.EditorTools.AutoUI
     /// </summary>
     internal static class GeneratedScriptAttacher
     {
-        private const string SessionKey = "AutoUI_AttachQueue";
+    private const string SessionKey = "AutoUI_AttachQueue";
+    private const string LinePrefix = "M|"; // 标记为“手动挂载”来源，拦截历史格式
 
         /// <summary>
         /// 记录一个待挂载事件。参数：预制体GUID + 类名 + 脚本资产路径
@@ -27,7 +25,7 @@ namespace UnityUtils.EditorTools.AutoUI
             if (!TryAttach(guid, className, scriptAssetPath))
             {
                 // 类型暂不可用，入队等待 DidReloadScripts
-                var item = guid + "|" + className + "|" + (scriptAssetPath ?? string.Empty);
+                var item = LinePrefix + guid + "|" + className + "|" + (scriptAssetPath ?? string.Empty);
                 var existed = SessionState.GetString(SessionKey, string.Empty);
                 // 去重
                 if (!string.IsNullOrEmpty(existed))
@@ -44,6 +42,11 @@ namespace UnityUtils.EditorTools.AutoUI
                     SessionState.SetString(SessionKey, item);
                 }
             }
+            else
+            {
+                // 立即挂载成功，刷新窗口显示
+                UnityUtils.EditorTools.AutoUI.AutoUICodeGeneratorWindow.RefreshAllOpenWindows();
+            }
         }
 
         [DidReloadScripts]
@@ -54,20 +57,48 @@ namespace UnityUtils.EditorTools.AutoUI
             SessionState.SetString(SessionKey, string.Empty);
 
             var lines = payload.Split(new[] {'\n'}, StringSplitOptions.RemoveEmptyEntries);
+            var toAssign = new System.Collections.Generic.List<(string guid, string className)>();
             foreach (var line in lines)
             {
                 try
                 {
-                    var parts = line.Split('|');
+                    if (!line.StartsWith(LinePrefix, StringComparison.Ordinal))
+                    {
+                        // 丢弃旧版本遗留的无前缀记录，避免“生成后自动挂载”的误解
+                        continue;
+                    }
+                    var pure = line.Substring(LinePrefix.Length);
+                    var parts = pure.Split('|');
                     if (parts.Length < 2) continue;
                     var guid = parts[0];
                     var className = parts[1];
                     var scriptAssetPath = parts.Length >= 3 ? parts[2] : string.Empty;
-                    TryAttach(guid, className, scriptAssetPath);
+                    if (TryAttach(guid, className, scriptAssetPath))
+                    {
+                        toAssign.Add((guid, className));
+                    }
                 }
                 catch (Exception ex)
                 {
                     Debug.LogError($"[AutoUI] 自动挂载脚本失败: {ex}");
+                }
+            }
+            // 刷新窗口显示，避免用户需要再点一次
+            UnityUtils.EditorTools.AutoUI.AutoUICodeGeneratorWindow.RefreshAllOpenWindows();
+
+            // 如果当前是序列化模式，尝试为成功挂载的 Prefab 赋 SerializedReference
+            var settings = UnityUtils.EditorTools.AutoUI.AutoUICodeGenSettings.Ensure();
+            if (settings.initAssignMode == UnityUtils.EditorTools.AutoUI.AutoUICodeGenSettings.InitAssignMode.SerializedReferences)
+            {
+                foreach (var item in toAssign)
+                {
+                    var path = AssetDatabase.GUIDToAssetPath(item.guid);
+                    var go = AssetDatabase.LoadAssetAtPath<UnityEngine.GameObject>(path);
+                    if (go == null) continue;
+                    // 重新收集字段并赋值
+                    var fields = UnityUtils.EditorTools.AutoUI.UICodeGenerator.CollectFields(go, settings);
+                    var stats = UnityUtils.EditorTools.AutoUI.SerializedReferenceAssigner.Assign(go, item.className, fields);
+                    Debug.Log($"[AutoUI] 序列化引用赋值：成功 {stats.success}/{stats.total}，缺路径 {stats.missingPath}，缺组件 {stats.missingComponent}");
                 }
             }
         }
