@@ -155,6 +155,39 @@ namespace UnityUtils.EditorTools.AutoUI
                 .ThenBy(f => f.name)
                 .ToList();
 
+            // 字段命名处理：组件前缀 + _camelCase（可选）
+            if (settings.useComponentPrefixForFields)
+            {
+                for (int i = 0; i < fields.Count; i++)
+                {
+                    var f = fields[i];
+                    var prefix = GetPrefixForTypeFullName(f.typeFullName, settings);
+                    var baseName = f.name;
+                    // 避免重复前缀（如 already starts with prefix_ 或 prefix）
+                    if (!string.IsNullOrEmpty(prefix))
+                    {
+                        var lower = baseName.ToLowerInvariant();
+                        if (!(lower.StartsWith(prefix + "_") || lower.StartsWith(prefix)))
+                        {
+                            baseName = prefix + "_" + baseName;
+                        }
+                    }
+                    fields[i] = (f.typeFullName, baseName, f.path, f.isComponent);
+                }
+            }
+
+            // 字段命名处理：应用 _camelCase（可选）
+            if (settings.privateFieldUnderscoreCamelCase)
+            {
+                for (int i = 0; i < fields.Count; i++)
+                {
+                    var f = fields[i];
+                    var camel = ToCamelCase(f.name);
+                    var finalName = camel.StartsWith("_") ? camel : "_" + camel;
+                    fields[i] = (f.typeFullName, finalName, f.path, f.isComponent);
+                }
+            }
+
             // 字段名唯一性处理
             EnsureUniqueFieldNames(fields);
 
@@ -169,12 +202,26 @@ namespace UnityUtils.EditorTools.AutoUI
                 var updated = ReplaceFirstClassName(original, className);
                 // 2) Upsert 字段段落
                 updated = UpsertSection(updated, FieldsStartMarker, FieldsEndMarker, BuildFieldsSection(fields));
-                // 3) Upsert 赋值方法段落（Awake/Start）
+                // 3) Upsert 只读属性段落（可选，开关关闭则移除）
+                if (settings.generateReadOnlyProperties)
+                {
+                    updated = UpsertSection(updated, PropsStartMarker, PropsEndMarker, BuildReadOnlyPropertiesSection(fields));
+                }
+                else
+                {
+                    // 如果存在则清空该段
+                    updated = UpsertSection(updated, PropsStartMarker, PropsEndMarker, string.Empty);
+                }
+                // 4) Upsert 赋值方法段落（Awake/Start）
                 updated = UpsertSection(updated, AssignStartMarker, AssignEndMarker,
                     BuildAssignSection(fields, settings.assignInAwake));
 
                 File.WriteAllText(userPath, updated, Encoding.UTF8);
                 AssetDatabase.ImportAsset(RelativeToProject(userPath));
+                if (settings.autoAddScriptToPrefab)
+                {
+                    GeneratedScriptAttacher.EnqueueAttach(prefab, className, RelativeToProject(userPath));
+                }
                 EditorUtility.DisplayDialog("完成", $"已更新: {userPath}", "确定");
             }
             else
@@ -183,6 +230,10 @@ namespace UnityUtils.EditorTools.AutoUI
                 var code = BuildFullFileWithMarkers(className, fields, settings.assignInAwake);
                 File.WriteAllText(userPath, code, Encoding.UTF8);
                 AssetDatabase.ImportAsset(RelativeToProject(userPath));
+                if (settings.autoAddScriptToPrefab)
+                {
+                    GeneratedScriptAttacher.EnqueueAttach(prefab, className, RelativeToProject(userPath));
+                }
                 EditorUtility.DisplayDialog("完成", $"已生成: {userPath}", "确定");
             }
         }
@@ -213,10 +264,12 @@ namespace UnityUtils.EditorTools.AutoUI
             return sb.ToString();
         }
 
-        private const string FieldsStartMarker = "// <auto-fields>";
-        private const string FieldsEndMarker = "// </auto-fields>";
-        private const string AssignStartMarker = "// <auto-assign>";
-        private const string AssignEndMarker = "// </auto-assign>";
+    private const string FieldsStartMarker = "// <auto-fields>";
+    private const string FieldsEndMarker = "// </auto-fields>";
+    private const string PropsStartMarker = "// <auto-props>";
+    private const string PropsEndMarker = "// </auto-props>";
+    private const string AssignStartMarker = "// <auto-assign>";
+    private const string AssignEndMarker = "// </auto-assign>";
 
         private static string BuildFullFileWithMarkers(string className,
             List<(string typeFullName, string name, string path, bool isComponent)> fields, bool assignInAwake)
@@ -229,8 +282,12 @@ namespace UnityUtils.EditorTools.AutoUI
             sb.AppendLine($"public class {className} : MonoBehaviour");
             sb.AppendLine("{");
             sb.Append(BuildFieldsSection(fields));
+            // 只读属性（可选）
+            if (AutoUICodeGenSettings.Ensure().generateReadOnlyProperties)
+            {
+                sb.Append(BuildReadOnlyPropertiesSection(fields));
+            }
             sb.Append(BuildAssignSection(fields, assignInAwake));
-            sb.AppendLine();
             sb.AppendLine("    // <user-code>");
             sb.AppendLine("    // 你的手写逻辑请写在这里，生成器不会修改此区域");
             sb.AppendLine("    // </user-code>");
@@ -245,12 +302,111 @@ namespace UnityUtils.EditorTools.AutoUI
             sb.AppendLine("    " + FieldsStartMarker);
             foreach (var f in fields)
             {
-                sb.AppendLine($"    private {f.typeFullName} {f.name};".Insert(0, "    "));
+                sb.AppendLine($"    private {f.typeFullName} {f.name};");
             }
 
             sb.AppendLine("    " + FieldsEndMarker);
-            sb.AppendLine();
             return sb.ToString();
+        }
+
+        private static string BuildReadOnlyPropertiesSection(List<(string typeFullName, string name, string path, bool isComponent)> fields)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("    " + PropsStartMarker);
+            foreach (var f in fields)
+            {
+                // 生成属性名：
+                // 1) 去掉前导下划线
+                var baseName = f.name.TrimStart('_');
+                // 2) 去掉重复后缀：_1 -> 1（保持语义唯一）
+                // 实际字段名中的重复后缀已在字段名里；属性名可不保留下划线
+                // 3) 可选：去掉组件前缀（如 btn_/tog_/txt_/img_/input_/sld_/rt_/go_）
+                if (AutoUICodeGenSettings.Ensure().stripPrefixInPropertyNames)
+                {
+                    baseName = StripKnownPrefixes(baseName);
+                }
+                var propName = ToPascalCase(baseName);
+                sb.AppendLine($"    public {f.typeFullName} {propName} => {f.name};");
+            }
+            sb.AppendLine("    " + PropsEndMarker);
+            return sb.ToString();
+        }
+
+        private static string ToPascalCase(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return name;
+            var parts = name.Split(new[] {'_', ' '}, StringSplitOptions.RemoveEmptyEntries);
+            var sb = new StringBuilder();
+            foreach (var p in parts)
+            {
+                if (p.Length == 0) continue;
+                sb.Append(char.ToUpperInvariant(p[0]));
+                if (p.Length > 1) sb.Append(p.Substring(1));
+            }
+            return sb.Length > 0 ? sb.ToString() : name;
+        }
+
+        private static string ToCamelCase(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return name;
+            var pascal = ToPascalCase(name);
+            if (string.IsNullOrEmpty(pascal)) return name;
+            return char.ToLowerInvariant(pascal[0]) + (pascal.Length > 1 ? pascal.Substring(1) : string.Empty);
+        }
+
+        private static string GetPrefixForTypeFullName(string typeFullName, AutoUICodeGenSettings settings)
+        {
+            if (settings != null && settings.componentPrefixes != null)
+            {
+                for (int i = 0; i < settings.componentPrefixes.Count; i++)
+                {
+                    var item = settings.componentPrefixes[i];
+                    if (!string.IsNullOrEmpty(item.typeFullName) && string.Equals(item.typeFullName, typeFullName, StringComparison.Ordinal))
+                        return item.prefix ?? string.Empty;
+                }
+            }
+            return string.Empty;
+        }
+
+        private static string StripKnownPrefixes(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return name;
+            var lower = name.ToLowerInvariant();
+
+            var settings = AutoUICodeGenSettings.Ensure();
+            var configured = new List<string>();
+            if (settings?.componentPrefixes != null)
+            {
+                foreach (var item in settings.componentPrefixes)
+                {
+                    if (string.IsNullOrWhiteSpace(item?.prefix)) continue;
+                    var p = item.prefix.Trim().ToLowerInvariant();
+                    if (p.Length == 0) continue;
+                    configured.Add(p);
+                }
+            }
+
+            // 如果没有配置，则退回到一组常见默认前缀
+            if (configured.Count == 0)
+            {
+                configured.AddRange(new[] { "btn", "tog", "sld", "input", "txt", "img", "rt", "go" });
+            }
+
+            // 优先匹配更长的前缀，避免 btn 与 btn1 冲突
+            foreach (var p in configured.OrderByDescending(s => s.Length))
+            {
+                var withUnderscore = p + "_";
+                if (lower.StartsWith(withUnderscore))
+                {
+                    return name.Substring(withUnderscore.Length);
+                }
+                if (lower.StartsWith(p))
+                {
+                    return name.Substring(p.Length);
+                }
+            }
+
+            return name;
         }
 
         private static string BuildAssignSection(
@@ -298,7 +454,6 @@ namespace UnityUtils.EditorTools.AutoUI
 
             sb.AppendLine("    }");
             sb.AppendLine("    " + AssignEndMarker);
-            sb.AppendLine();
             return sb.ToString();
         }
 
@@ -309,26 +464,70 @@ namespace UnityUtils.EditorTools.AutoUI
             var end = source.IndexOf(endMarker, StringComparison.Ordinal);
             if (start >= 0 && end > start)
             {
+                // 扩展替换范围到整行，避免行首原有缩进残留导致重复缩进
+                int lineStart = source.LastIndexOf('\n', Math.Max(0, start - 1));
+                if (lineStart < 0) lineStart = 0; else lineStart += 1; // 指向行首第一个字符
+
                 end += endMarker.Length;
-                return source.Substring(0, start) + newSection + source.Substring(end);
+                // 包含 endMarker 所在行的行尾换行（如果有），使替换更干净
+                int lineEnd = source.IndexOf('\n', end);
+                if (lineEnd >= 0) end = lineEnd + 1; // 包含换行
+
+                // 如果 newSection 为空，等同于移除此段
+                return source.Substring(0, lineStart) + newSection + source.Substring(end);
             }
 
-            // 未找到标记则插入：字段在类首个 '{' 之后，赋值段落在最后一个 '}' 之前
+            // 未找到标记则插入：字段在类首个 '{' 之后，属性在字段后或赋值前，赋值在最后一个 '}' 之前
             var openIdx = source.IndexOf('{');
             var closeIdx = source.LastIndexOf('}');
             if (openIdx >= 0)
             {
                 if (startMarker == FieldsStartMarker)
                 {
-                    return source.Insert(openIdx + 1, "\n" + newSection);
+                    // 在 "{" 后面插入，若前面已有换行则避免重复
+                    var insertPos = openIdx + 1;
+                    var needsNl = insertPos < source.Length && source[insertPos] != '\n';
+                    var payload = needsNl ? ("\n" + newSection) : newSection;
+                    return source.Insert(insertPos, payload);
+                }
+                else if (startMarker == PropsStartMarker)
+                {
+                    // 优先插在字段之后（若存在）
+                    var fieldsEnd = source.IndexOf(FieldsEndMarker, StringComparison.Ordinal);
+                    if (fieldsEnd >= 0)
+                    {
+                        int insertPos = fieldsEnd + FieldsEndMarker.Length;
+                        var needsNl = insertPos < source.Length && source[insertPos] != '\n';
+                        var payload = needsNl ? ("\n" + newSection) : newSection;
+                        return source.Insert(insertPos, payload);
+                    }
+                    // 否则，插在赋值段落之前（若存在）
+                    var assignStart = source.IndexOf(AssignStartMarker, StringComparison.Ordinal);
+                    if (assignStart >= 0)
+                    {
+                        var needsNl = assignStart > 0 && source[assignStart - 1] != '\n';
+                        var payload = needsNl ? ("\n" + newSection) : newSection;
+                        return source.Insert(assignStart, payload);
+                    }
+                    // 再否则，插在类尾 '}' 之前
+                    if (closeIdx > openIdx)
+                    {
+                        var needsNl = closeIdx > 0 && source[closeIdx - 1] != '\n';
+                        var payload = needsNl ? ("\n" + newSection) : newSection;
+                        return source.Insert(closeIdx, payload);
+                    }
                 }
                 else if (endMarker == AssignEndMarker && closeIdx > openIdx)
                 {
-                    return source.Insert(closeIdx, newSection);
+                    var needsNl = closeIdx > 0 && source[closeIdx - 1] != '\n';
+                    var payload = needsNl ? ("\n" + newSection) : newSection;
+                    return source.Insert(closeIdx, payload);
                 }
             }
 
-            return source + "\n" + newSection;
+            // 兜底：追加时也避免连续空行
+            var suffixNeedsNl = source.Length > 0 && source[source.Length - 1] != '\n';
+            return source + (suffixNeedsNl ? "\n" : string.Empty) + newSection;
         }
 
         private static string ReplaceFirstClassName(string source, string newClassName)
