@@ -13,6 +13,9 @@ namespace UnityUtils.EditorTools.AutoUI
         private readonly List<GameObject> _prefabList = new List<GameObject>();
         private readonly List<bool> _selected = new List<bool>();
         private bool _prefixMappingFoldout = false; // 组件前缀映射折叠，默认折叠
+        private int _lastGenerateSuccess;
+        private int _lastGenerateFail;
+        private string _lastGenerateMessage;
 
         [MenuItem("Tools/UI/自动UI代码生成器")]
         public static void Open()
@@ -39,15 +42,18 @@ namespace UnityUtils.EditorTools.AutoUI
                 {
                     DrawPrefabList(true);
                 }
+
                 EditorGUILayout.Space();
                 DrawFooter();
             }
+
             HandleDragAndDrop();
         }
 
         private void DrawHeader()
         {
-            EditorGUILayout.LabelField("基础设置", EditorStyles.boldLabel);
+            GUILayout.Space(10);
+            EditorGUILayout.LabelField("路径设置", EditorStyles.boldLabel);
             EditorGUI.BeginChangeCheck();
 
             using (new EditorGUILayout.HorizontalScope())
@@ -81,87 +87,88 @@ namespace UnityUtils.EditorTools.AutoUI
                 }
             }
 
-            using (new EditorGUILayout.HorizontalScope())
+            GUILayout.Space(10);
+            EditorGUILayout.PrefixLabel("包含组件");
+            using (new EditorGUILayout.VerticalScope())
             {
                 _settings.autoIncludeCommonControls = EditorGUILayout.ToggleLeft(
                     "自动包含常用控件(Button/Toggle/Slider/InputField 及 TMP 相关)", _settings.autoIncludeCommonControls);
+
+                _settings.autoIncludeExtendedControls = EditorGUILayout.ToggleLeft(
+                    "扩展：自动包含 ScrollRect/Scrollbar/Dropdown",
+                    _settings.autoIncludeExtendedControls);
             }
 
-            using (new EditorGUILayout.HorizontalScope())
+            GUILayout.Space(10);
+            EditorGUILayout.PrefixLabel("生成设置");
+            using (new EditorGUILayout.VerticalScope())
             {
-                _settings.assignInAwake = EditorGUILayout.ToggleLeft("在 Awake 中赋值(否则 Start)", _settings.assignInAwake);
-                _settings.requireUppercaseClassName =
-                    EditorGUILayout.ToggleLeft("类名首字母需大写", _settings.requireUppercaseClassName);
-            }
+                _settings.initAssignMode = (AutoUICodeGenSettings.InitAssignMode)EditorGUILayout.EnumPopup(
+                    new GUIContent("生成与赋值方式", "选择在 Awake 查找、Start 查找，或使用序列化引用（仅生成 [SerializeField] 字段，编辑器赋值）"),
+                    _settings.initAssignMode);
 
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                _settings.generateReadOnlyProperties = EditorGUILayout.ToggleLeft("为每个字段生成同名 PascalCase 只读属性",
-                    _settings.generateReadOnlyProperties);
-            }
-
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                _settings.privateFieldUnderscoreCamelCase =
-                    EditorGUILayout.ToggleLeft("字段命名为 _camelCase（示例：btn_ok -> _btnOk）",
-                        _settings.privateFieldUnderscoreCamelCase);
-            }
-
-            using (new EditorGUILayout.HorizontalScope())
-            {
                 _settings.autoAddScriptToPrefab =
                     EditorGUILayout.ToggleLeft("生成后自动把脚本组件添加到预制体根节点", _settings.autoAddScriptToPrefab);
-            }
 
-            using (new EditorGUILayout.HorizontalScope())
-            {
+                _settings.requireUppercaseClassName =
+                    EditorGUILayout.ToggleLeft("类名首字母需大写", _settings.requireUppercaseClassName);
+
+                _settings.generateReadOnlyProperties = EditorGUILayout.ToggleLeft(
+                    "为每个字段生成同名 PascalCase 只读属性",
+                    _settings.generateReadOnlyProperties);
+
+                _settings.privateFieldUnderscoreCamelCase =
+                    EditorGUILayout.ToggleLeft("是否使用下划线命名（示例：btn_ok -> _btnOk）",
+                        _settings.privateFieldUnderscoreCamelCase);
+
                 _settings.useComponentPrefixForFields = EditorGUILayout.ToggleLeft(
-                    "字段使用组件前缀 (Button->btn, Toggle->tog, Slider->sld, InputField->input, Text->txt, Image->img)",
+                    "是否组件前缀 前缀在下面列表中设置",
                     _settings.useComponentPrefixForFields);
-            }
 
-            // 可编辑前缀表（支持折叠，默认折叠）
-            if (_settings.useComponentPrefixForFields)
-            {
-                EditorGUILayout.Space();
-                _prefixMappingFoldout = EditorGUILayout.Foldout(_prefixMappingFoldout, "组件前缀映射", true);
-                if (_prefixMappingFoldout)
+                // 可编辑前缀表（支持折叠，默认折叠）
+                if (_settings.useComponentPrefixForFields)
                 {
-                    using (new EditorGUILayout.VerticalScope("box"))
+                    EditorGUILayout.Space();
+                    _prefixMappingFoldout = EditorGUILayout.Foldout(_prefixMappingFoldout, "组件前缀映射", true);
+                    if (_prefixMappingFoldout)
                     {
-                        for (int i = 0; i < _settings.componentPrefixes.Count; i++)
+                        using (new EditorGUILayout.VerticalScope("box"))
                         {
-                            var item = _settings.componentPrefixes[i];
-                            using (new EditorGUILayout.HorizontalScope())
+                            for (int i = 0; i < _settings.componentPrefixes.Count; i++)
                             {
-                                item.typeFullName = EditorGUILayout.TextField(item.typeFullName);
-                                item.prefix = EditorGUILayout.TextField(item.prefix, GUILayout.Width(120));
-                                if (GUILayout.Button("删除", GUILayout.Width(60)))
+                                var item = _settings.componentPrefixes[i];
+                                using (new EditorGUILayout.HorizontalScope())
                                 {
-                                    _settings.componentPrefixes.RemoveAt(i);
-                                    i--;
-                                    continue;
+                                    item.typeFullName = EditorGUILayout.TextField(item.typeFullName);
+                                    item.prefix = EditorGUILayout.TextField(item.prefix, GUILayout.Width(120));
+                                    if (GUILayout.Button("删除", GUILayout.Width(60)))
+                                    {
+                                        _settings.componentPrefixes.RemoveAt(i);
+                                        i--;
+                                        continue;
+                                    }
                                 }
                             }
-                        }
 
-                        using (new EditorGUILayout.HorizontalScope())
-                        {
-                            if (GUILayout.Button("新增映射", GUILayout.Width(100)))
+                            using (new EditorGUILayout.HorizontalScope())
                             {
-                                _settings.componentPrefixes.Add(new AutoUICodeGenSettings.TypePrefix
-                                    { typeFullName = "", prefix = "" });
-                            }
+                                if (GUILayout.Button("新增映射", GUILayout.Width(100)))
+                                {
+                                    _settings.componentPrefixes.Add(new AutoUICodeGenSettings.TypePrefix
+                                        { typeFullName = "", prefix = "" });
+                                }
 
-                            GUILayout.FlexibleSpace();
-                            if (GUILayout.Button("重置为默认", GUILayout.Width(120)))
-                            {
-                                _settings.FillDefaultPrefixes();
+                                GUILayout.FlexibleSpace();
+                                if (GUILayout.Button("重置为默认", GUILayout.Width(120)))
+                                {
+                                    _settings.FillDefaultPrefixes();
+                                }
                             }
                         }
                     }
                 }
             }
+
 
             if (EditorGUI.EndChangeCheck()) SaveSettings();
 
@@ -169,6 +176,12 @@ namespace UnityUtils.EditorTools.AutoUI
             using (new EditorGUILayout.HorizontalScope())
             {
                 if (GUILayout.Button("刷新预制体列表", GUILayout.Width(140))) RefreshPrefabs();
+                if (GUILayout.Button("重新扫描并生成全部", GUILayout.Width(180)))
+                {
+                    RefreshPrefabs();
+                    GenerateSelected(prefabAll: true);
+                }
+
                 GUILayout.FlexibleSpace();
                 //EditorGUILayout.HelpBox("可拖拽文件夹到窗口，快速设置路径并刷新。", MessageType.Info);
             }
@@ -216,14 +229,56 @@ namespace UnityUtils.EditorTools.AutoUI
                 GUILayout.FlexibleSpace();
                 if (GUILayout.Button("为所选预制生成脚本", GUILayout.Height(28)))
                 {
-                    for (int i = 0; i < _prefabList.Count; i++)
-                    {
-                        if (_selected[i])
-                        {
-                            UICodeGenerator.GenerateScript(_prefabList[i], _settings.scriptOutputFolder, _settings);
-                        }
-                    }
+                    GenerateSelected();
                 }
+            }
+
+            if (!string.IsNullOrEmpty(_lastGenerateMessage))
+            {
+                EditorGUILayout.HelpBox(_lastGenerateMessage,
+                    _lastGenerateFail == 0 ? MessageType.Info : MessageType.Warning);
+            }
+        }
+
+        private void GenerateSelected(bool prefabAll = false)
+        {
+            _lastGenerateSuccess = 0;
+            _lastGenerateFail = 0;
+            _lastGenerateMessage = string.Empty;
+
+            try
+            {
+                int total = 0;
+                EditorUtility.DisplayProgressBar("批量生成 UI 脚本", "开始...", 0f);
+                for (int i = 0; i < _prefabList.Count; i++)
+                {
+                    if (prefabAll || _selected[i]) total++;
+                }
+
+                int done = 0;
+                for (int i = 0; i < _prefabList.Count; i++)
+                {
+                    if (!(prefabAll || _selected[i])) continue;
+                    var go = _prefabList[i];
+                    EditorUtility.DisplayProgressBar("批量生成 UI 脚本", go.name, total > 0 ? (float)done / total : 0f);
+                    try
+                    {
+                        UICodeGenerator.GenerateScript(go, _settings.scriptOutputFolder, _settings);
+                        _lastGenerateSuccess++;
+                    }
+                    catch (System.Exception ex)
+                    {
+                        _lastGenerateFail++;
+                        Debug.LogError($"[AutoUI] 生成失败 {go?.name}: {ex.Message}");
+                    }
+
+                    done++;
+                }
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
+                _lastGenerateMessage = $"生成完成：成功 {_lastGenerateSuccess}，失败 {_lastGenerateFail}";
             }
         }
 

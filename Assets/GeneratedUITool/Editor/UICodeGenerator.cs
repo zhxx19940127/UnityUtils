@@ -12,7 +12,7 @@ namespace UnityUtils.EditorTools.AutoUI
 {
     public static class UICodeGenerator
     {
-        private static IEnumerable<Type> GetAutoIncludeTypes()
+        private static IEnumerable<Type> GetAutoIncludeTypes(AutoUICodeGenSettings settings)
         {
             // 仅包含需求中指定的基础 UI 控件
             var list = new List<Type>
@@ -23,6 +23,14 @@ namespace UnityUtils.EditorTools.AutoUI
             // 尝试反射获取 TMP 相关类型，不依赖脚本宏定义
             TryAddType(list, "TMPro.TMP_Text");
             TryAddType(list, "TMPro.TMP_InputField");
+
+            // 扩展控件（可选）
+            if (settings != null && settings.autoIncludeExtendedControls)
+            {
+                TryAddType(list, "UnityEngine.UI.ScrollRect");
+                TryAddType(list, "UnityEngine.UI.Scrollbar");
+                TryAddType(list, "UnityEngine.UI.Dropdown");
+            }
 
             return list;
         }
@@ -76,7 +84,7 @@ namespace UnityUtils.EditorTools.AutoUI
             // 1) 自动包含常用控件
             if (settings.autoIncludeCommonControls)
             {
-                foreach (var t in GetAutoIncludeTypes())
+                foreach (var t in GetAutoIncludeTypes(settings))
                 {
                     var comps = prefab.GetComponentsInChildren(t, true);
                     foreach (var c in comps)
@@ -201,7 +209,8 @@ namespace UnityUtils.EditorTools.AutoUI
                 // 1) 更新类名（仅替换第一个 class 声明的类名）
                 var updated = ReplaceFirstClassName(original, className);
                 // 2) Upsert 字段段落
-                updated = UpsertSection(updated, FieldsStartMarker, FieldsEndMarker, BuildFieldsSection(fields));
+                bool serializedMode = settings.initAssignMode == AutoUICodeGenSettings.InitAssignMode.SerializedReferences;
+                updated = UpsertSection(updated, FieldsStartMarker, FieldsEndMarker, BuildFieldsSection(fields, serializedMode));
                 // 3) Upsert 只读属性段落（可选，开关关闭则移除）
                 if (settings.generateReadOnlyProperties)
                 {
@@ -212,9 +221,15 @@ namespace UnityUtils.EditorTools.AutoUI
                     // 如果存在则清空该段
                     updated = UpsertSection(updated, PropsStartMarker, PropsEndMarker, string.Empty);
                 }
-                // 4) Upsert 赋值方法段落（Awake/Start）
-                updated = UpsertSection(updated, AssignStartMarker, AssignEndMarker,
-                    BuildAssignSection(fields, settings.assignInAwake));
+                // 4) Upsert 赋值方法段落（Awake/Start 或序列化模式下为空）
+                var assignSection = serializedMode ? string.Empty : BuildAssignSection(fields, settings.initAssignMode == AutoUICodeGenSettings.InitAssignMode.AwakeFind);
+                var beforeAssign = updated;
+                updated = UpsertSection(updated, AssignStartMarker, AssignEndMarker, assignSection);
+                if (string.IsNullOrEmpty(beforeAssign) || (beforeAssign.IndexOf(AssignStartMarker, StringComparison.Ordinal) < 0 && !string.IsNullOrEmpty(assignSection)))
+                {
+                    if (AutoUICodeGenSettings.Ensure().logMarkerRecovery)
+                        Debug.Log("[AutoUI] 检测到赋值标记段缺失，已自动恢复。");
+                }
 
                 File.WriteAllText(userPath, updated, Encoding.UTF8);
                 AssetDatabase.ImportAsset(RelativeToProject(userPath));
@@ -227,7 +242,7 @@ namespace UnityUtils.EditorTools.AutoUI
             else
             {
                 // 首次生成：写入 using + 类定义 + 标记段落
-                var code = BuildFullFileWithMarkers(className, fields, settings.assignInAwake);
+                var code = BuildFullFileWithMarkers(className, fields, settings.initAssignMode == AutoUICodeGenSettings.InitAssignMode.AwakeFind, settings.initAssignMode == AutoUICodeGenSettings.InitAssignMode.SerializedReferences);
                 File.WriteAllText(userPath, code, Encoding.UTF8);
                 AssetDatabase.ImportAsset(RelativeToProject(userPath));
                 if (settings.autoAddScriptToPrefab)
@@ -240,7 +255,7 @@ namespace UnityUtils.EditorTools.AutoUI
 
         private static string BuildClassCode(string className,
             List<(string typeFullName, string name, string path, bool isComponent)> fields, bool assignInAwake,
-            bool includeUsings)
+            bool includeUsings, bool serializedMode)
         {
             var sb = new StringBuilder();
             sb.AppendLine("// 自动生成，请勿手改（可重复生成覆盖）");
@@ -255,10 +270,11 @@ namespace UnityUtils.EditorTools.AutoUI
             sb.AppendLine("{");
 
             // 字段（标记段）
-            sb.Append(BuildFieldsSection(fields));
+            sb.Append(BuildFieldsSection(fields, serializedMode));
 
             // 赋值方法（标记段）
-            sb.Append(BuildAssignSection(fields, assignInAwake));
+            if (!serializedMode)
+                sb.Append(BuildAssignSection(fields, assignInAwake));
 
             sb.AppendLine("}");
             return sb.ToString();
@@ -272,7 +288,7 @@ namespace UnityUtils.EditorTools.AutoUI
     private const string AssignEndMarker = "// </auto-assign>";
 
         private static string BuildFullFileWithMarkers(string className,
-            List<(string typeFullName, string name, string path, bool isComponent)> fields, bool assignInAwake)
+            List<(string typeFullName, string name, string path, bool isComponent)> fields, bool assignInAwake, bool serializedMode)
         {
             var sb = new StringBuilder();
             sb.AppendLine("// 自动生成，请勿手改（可重复生成覆盖）");
@@ -281,13 +297,14 @@ namespace UnityUtils.EditorTools.AutoUI
             sb.AppendLine();
             sb.AppendLine($"public class {className} : MonoBehaviour");
             sb.AppendLine("{");
-            sb.Append(BuildFieldsSection(fields));
+            sb.Append(BuildFieldsSection(fields, serializedMode));
             // 只读属性（可选）
             if (AutoUICodeGenSettings.Ensure().generateReadOnlyProperties)
             {
                 sb.Append(BuildReadOnlyPropertiesSection(fields));
             }
-            sb.Append(BuildAssignSection(fields, assignInAwake));
+            if (!serializedMode)
+                sb.Append(BuildAssignSection(fields, assignInAwake));
             sb.AppendLine("    // <user-code>");
             sb.AppendLine("    // 你的手写逻辑请写在这里，生成器不会修改此区域");
             sb.AppendLine("    // </user-code>");
@@ -296,13 +313,14 @@ namespace UnityUtils.EditorTools.AutoUI
         }
 
         private static string BuildFieldsSection(
-            List<(string typeFullName, string name, string path, bool isComponent)> fields)
+            List<(string typeFullName, string name, string path, bool isComponent)> fields, bool serializedMode = false)
         {
             var sb = new StringBuilder();
             sb.AppendLine("    " + FieldsStartMarker);
             foreach (var f in fields)
             {
-                sb.AppendLine($"    private {f.typeFullName} {f.name};");
+                var attr = serializedMode ? "[SerializeField] " : string.Empty;
+                sb.AppendLine($"    {attr}private {f.typeFullName} {f.name};");
             }
 
             sb.AppendLine("    " + FieldsEndMarker);
@@ -417,16 +435,24 @@ namespace UnityUtils.EditorTools.AutoUI
             sb.AppendLine("    " + AssignStartMarker);
             sb.AppendLine($"    private void {method}()");
             sb.AppendLine("    {");
+            int __idx = 0;
             foreach (var f in fields)
             {
                 bool isRoot = string.IsNullOrEmpty(f.path);
                 if (f.isComponent)
                 {
                     if (isRoot)
+                    {
                         sb.AppendLine($"        {f.name} = GetComponent<{f.typeFullName}>();");
+                        sb.AppendLine($"        if ({f.name} == null) Debug.LogError(\"[AutoUI] 缺少组件 {f.typeFullName} 于根节点\");");
+                    }
                     else
-                        sb.AppendLine(
-                            $"        {f.name} = transform.Find(\"{EscapePath(f.path)}\").GetComponent<{f.typeFullName}>();");
+                    {
+                        var trVar = $"__tr{__idx++}";
+                        sb.AppendLine($"        var {trVar} = transform.Find(\"{EscapePath(f.path)}\");");
+                        sb.AppendLine($"        if ({trVar} == null) Debug.LogError(\"[AutoUI] 未找到路径: {EscapePath(f.path)}\");");
+                        sb.AppendLine($"        else {{ {f.name} = {trVar}.GetComponent<{f.typeFullName}>(); if ({f.name} == null) Debug.LogError(\"[AutoUI] 路径 {EscapePath(f.path)} 缺少组件 {f.typeFullName}\"); }}");
+                    }
                 }
                 else
                 {
@@ -435,15 +461,27 @@ namespace UnityUtils.EditorTools.AutoUI
                         if (isRoot)
                             sb.AppendLine($"        {f.name} = gameObject;");
                         else
-                            sb.AppendLine($"        {f.name} = transform.Find(\"{EscapePath(f.path)}\").gameObject;");
+                        {
+                            var trVar = $"__tr{__idx++}";
+                            sb.AppendLine($"        var {trVar} = transform.Find(\"{EscapePath(f.path)}\");");
+                            sb.AppendLine($"        if ({trVar} == null) Debug.LogError(\"[AutoUI] 未找到路径: {EscapePath(f.path)}\");");
+                            sb.AppendLine($"        else {{ {f.name} = {trVar}.gameObject; }}");
+                        }
                     }
                     else if (f.typeFullName == typeof(RectTransform).FullName)
                     {
                         if (isRoot)
+                        {
                             sb.AppendLine($"        {f.name} = GetComponent<UnityEngine.RectTransform>();");
+                            sb.AppendLine($"        if ({f.name} == null) Debug.LogError(\"[AutoUI] 缺少组件 UnityEngine.RectTransform 于根节点\");");
+                        }
                         else
-                            sb.AppendLine(
-                                $"        {f.name} = transform.Find(\"{EscapePath(f.path)}\").GetComponent<UnityEngine.RectTransform>();");
+                        {
+                            var trVar = $"__tr{__idx++}";
+                            sb.AppendLine($"        var {trVar} = transform.Find(\"{EscapePath(f.path)}\");");
+                            sb.AppendLine($"        if ({trVar} == null) Debug.LogError(\"[AutoUI] 未找到路径: {EscapePath(f.path)}\");");
+                            sb.AppendLine($"        else {{ {f.name} = {trVar}.GetComponent<UnityEngine.RectTransform>(); if ({f.name} == null) Debug.LogError(\"[AutoUI] 路径 {EscapePath(f.path)} 缺少组件 UnityEngine.RectTransform\"); }}");
+                        }
                     }
                     else
                     {

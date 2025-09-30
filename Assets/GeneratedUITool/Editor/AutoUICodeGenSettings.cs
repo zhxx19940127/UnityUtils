@@ -11,6 +11,13 @@ namespace UnityUtils.EditorTools.AutoUI
     {
         public const string DefaultAssetPath = "Assets/GeneratedUITool/Editor/AutoUICodeGenSettings.asset";
 
+        public enum InitAssignMode
+        {
+            AwakeFind,
+            StartFind,
+            SerializedReferences
+        }
+
         [Header("默认目录")]
         [Tooltip("UI 预制体所在目录（可多级）")]
         public string prefabFolder = "Assets/Resources/UI";
@@ -22,8 +29,8 @@ namespace UnityUtils.EditorTools.AutoUI
         [Tooltip("为未标记的 Button/Toggle/Slider/InputField/TMP 相关组件自动生成字段并在 Awake/Start 中查找")]
         public bool autoIncludeCommonControls = true;
 
-        [Tooltip("在 Awake 中生成查找代码（否则在 Start）")]
-        public bool assignInAwake = true;
+    [Tooltip("初始化模式（Awake 查找 / Start 查找 / 序列化引用）")]
+    public InitAssignMode initAssignMode = InitAssignMode.AwakeFind;
 
         [Tooltip("类名是否强制以大写字母开头")]
         public bool requireUppercaseClassName = true;
@@ -42,6 +49,15 @@ namespace UnityUtils.EditorTools.AutoUI
 
     [Tooltip("生成后自动将脚本组件添加到对应预制体的根节点上")]
     public bool autoAddScriptToPrefab = false;
+
+    [Obsolete("Use initAssignMode instead"), HideInInspector]
+    public bool useSerializedReferences = false;
+
+    [Tooltip("自动包含扩展控件（ScrollRect/Scrollbar/Dropdown）")]
+    public bool autoIncludeExtendedControls = false;
+
+    [Tooltip("当检测到脚本缺失的标记段被自动恢复时输出提示日志（避免静默恢复导致困惑）")]
+    public bool logMarkerRecovery = true;
 
         [Serializable]
         public class TypePrefix
@@ -68,11 +84,30 @@ namespace UnityUtils.EditorTools.AutoUI
                 UnityEditor.AssetDatabase.SaveAssets();
                 settings.FillDefaultPrefixes();
             }
+            settings.MigrateLegacyFlagsToEnum();
             if (settings.componentPrefixes == null || settings.componentPrefixes.Count == 0)
             {
                 settings.FillDefaultPrefixes();
             }
             return settings;
+        }
+
+        // 兼容旧版本布尔开关（assignInAwake/useSerializedReferences）到枚举
+        public void MigrateLegacyFlagsToEnum()
+        {
+            // 如果资产是旧版本，useSerializedReferences 为 true，应迁移到 SerializedReferences
+            if (initAssignMode == InitAssignMode.AwakeFind)
+            {
+                if (useSerializedReferences)
+                {
+                    initAssignMode = InitAssignMode.SerializedReferences;
+                }
+                else
+                {
+                    // 旧版本还可能存在 assignInAwake 布尔（已移除字段，按默认 AwakeFind 处理）
+                    // 如果用户期望 Start，则需在窗口里调整为 StartFind
+                }
+            }
         }
 
         public void FillDefaultPrefixes()

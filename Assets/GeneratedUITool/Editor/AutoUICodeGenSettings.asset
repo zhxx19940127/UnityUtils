@@ -22,6 +22,9 @@ MonoBehaviour:
   useComponentPrefixForFields: 1
   stripPrefixInPropertyNames: 1
   autoAddScriptToPrefab: 1
+  useSerializedReferences: 0
+  autoIncludeExtendedControls: 1
+  logMarkerRecovery: 1
   componentPrefixes:
   - typeFullName: UnityEngine.UI.Button
     prefix: btn
