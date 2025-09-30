@@ -21,6 +21,8 @@ MonoBehaviour:
   privateFieldUnderscoreCamelCase: 1
   useComponentPrefixForFields: 1
   stripPrefixInPropertyNames: 1
+  wrapNamespace: 
+  baseClassFullName: UnityEngine.MonoBehaviour
   useSerializedReferences: 0
   autoIncludeExtendedControls: 1
   logMarkerRecovery: 1

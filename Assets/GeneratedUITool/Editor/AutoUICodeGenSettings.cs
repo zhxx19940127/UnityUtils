@@ -13,6 +13,7 @@ namespace UnityUtils.EditorTools.AutoUI
 
         public enum InitAssignMode
         {
+            // 兼容旧值：AwakeFind/StartFind 均视为 方法赋值（生成 InitRefs 方法，由用户手动调用）
             AwakeFind,
             StartFind,
             SerializedReferences
@@ -26,8 +27,8 @@ namespace UnityUtils.EditorTools.AutoUI
         [Header("生成选项")] [Tooltip("为未标记的 Button/Toggle/Slider/InputField/TMP 相关组件自动生成字段并在 Awake/Start 中查找")]
         public bool autoIncludeCommonControls = true;
 
-        [Tooltip("初始化模式（Awake 查找 / Start 查找 / 序列化引用）")]
-        public InitAssignMode initAssignMode = InitAssignMode.AwakeFind;
+    [Tooltip("初始化模式（方法赋值/序列化引用）。方法赋值：生成 InitRefs 方法，需手动调用；序列化引用：生成 [SerializeField] 并在编辑器赋值")]
+    public InitAssignMode initAssignMode = InitAssignMode.AwakeFind;
 
         [Tooltip("类名是否强制以大写字母开头")] public bool requireUppercaseClassName = true;
 
@@ -43,6 +44,13 @@ namespace UnityUtils.EditorTools.AutoUI
 
         [Tooltip("属性名移除组件前缀（例如 _btnOk 的属性名为 Ok 或 BtnOk；建议开启）")]
         public bool stripPrefixInPropertyNames = true;
+
+    [Header("类包装设置")]
+    [Tooltip("可选：为生成的类添加命名空间包装，不填则不使用命名空间")]
+    public string wrapNamespace = "";
+
+    [Tooltip("可选：基类全名（含命名空间）。为空则使用 UnityEngine.MonoBehaviour")]
+    public string baseClassFullName = "UnityEngine.MonoBehaviour";
 
     // 自动挂载已取消，改为窗口手动触发
 
@@ -94,18 +102,11 @@ namespace UnityUtils.EditorTools.AutoUI
         public void MigrateLegacyFlagsToEnum()
         {
             // 如果资产是旧版本，useSerializedReferences 为 true，应迁移到 SerializedReferences
-            if (initAssignMode == InitAssignMode.AwakeFind)
+            if (useSerializedReferences)
             {
-                if (useSerializedReferences)
-                {
-                    initAssignMode = InitAssignMode.SerializedReferences;
-                }
-                else
-                {
-                    // 旧版本还可能存在 assignInAwake 布尔（已移除字段，按默认 AwakeFind 处理）
-                    // 如果用户期望 Start，则需在窗口里调整为 StartFind
-                }
+                initAssignMode = InitAssignMode.SerializedReferences;
             }
+            // 其余 AwakeFind / StartFind 均视为 方法赋值模式
         }
 
         public void FillDefaultPrefixes()

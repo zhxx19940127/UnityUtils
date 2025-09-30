@@ -63,7 +63,7 @@ namespace UnityUtils.EditorTools.AutoUI
             return null;
         }
 
-        public static GenerationResult GenerateScript(GameObject prefab, string scriptFolder, AutoUICodeGenSettings settings)
+    public static GenerationResult GenerateScript(GameObject prefab, string scriptFolder, AutoUICodeGenSettings settings)
         {
             var result = new GenerationResult { fileChanged = false, assignStats = null };
             if (prefab == null)
@@ -207,15 +207,15 @@ namespace UnityUtils.EditorTools.AutoUI
             if (File.Exists(userPath))
             {
                 var original = File.ReadAllText(userPath, Encoding.UTF8);
-                var updated = ReplaceFirstClassName(original, className);
-                updated = UpsertSection(updated, FieldsStartMarker, FieldsEndMarker, BuildFieldsSection(fields, serializedMode));
+                var updated = ReplaceClassSignature(original, className, settings);
+                updated = UpsertSectionInClass(updated, className, FieldsStartMarker, FieldsEndMarker, BuildFieldsSection(fields, serializedMode));
                 if (settings.generateReadOnlyProperties)
-                    updated = UpsertSection(updated, PropsStartMarker, PropsEndMarker, BuildReadOnlyPropertiesSection(fields));
+                    updated = UpsertSectionInClass(updated, className, PropsStartMarker, PropsEndMarker, BuildReadOnlyPropertiesSection(fields));
                 else
-                    updated = UpsertSection(updated, PropsStartMarker, PropsEndMarker, string.Empty);
-                var assignSection = serializedMode ? string.Empty : BuildAssignSection(fields, settings.initAssignMode == AutoUICodeGenSettings.InitAssignMode.AwakeFind);
+                    updated = UpsertSectionInClass(updated, className, PropsStartMarker, PropsEndMarker, string.Empty);
+                var assignSection = serializedMode ? string.Empty : BuildInitMethodSection(fields);
                 var beforeAssign = updated;
-                updated = UpsertSection(updated, AssignStartMarker, AssignEndMarker, assignSection);
+                updated = UpsertSectionInClass(updated, className, AssignStartMarker, AssignEndMarker, assignSection);
                 if (string.IsNullOrEmpty(beforeAssign) || (beforeAssign.IndexOf(AssignStartMarker, StringComparison.Ordinal) < 0 && !string.IsNullOrEmpty(assignSection)))
                 {
                     if (AutoUICodeGenSettings.Ensure().logMarkerRecovery)
@@ -238,7 +238,7 @@ namespace UnityUtils.EditorTools.AutoUI
             }
             else
             {
-                var code = BuildFullFileWithMarkers(className, fields, settings.initAssignMode == AutoUICodeGenSettings.InitAssignMode.AwakeFind, serializedMode);
+                var code = BuildFullFileWithMarkers(className, fields, serializedMode, settings);
                 File.WriteAllText(userPath, code, Encoding.UTF8);
                 AssetDatabase.ImportAsset(RelativeToProject(userPath));
                 result.fileChanged = true;
@@ -376,8 +376,8 @@ namespace UnityUtils.EditorTools.AutoUI
         }
 
         private static string BuildClassCode(string className,
-            List<(string typeFullName, string name, string path, bool isComponent, int compIndex)> fields, bool assignInAwake,
-            bool includeUsings, bool serializedMode)
+            List<(string typeFullName, string name, string path, bool isComponent, int compIndex)> fields,
+            bool includeUsings, bool serializedMode, AutoUICodeGenSettings settings)
         {
             var sb = new StringBuilder();
             sb.AppendLine("// 自动生成，请勿手改（可重复生成覆盖）");
@@ -388,11 +388,33 @@ namespace UnityUtils.EditorTools.AutoUI
                 sb.AppendLine();
             }
 
-            sb.AppendLine($"public class {className} : MonoBehaviour");
-            sb.AppendLine("{");
+            var baseCls = string.IsNullOrWhiteSpace(settings.baseClassFullName) ? "UnityEngine.MonoBehaviour" : settings.baseClassFullName.Trim();
+
+            Action body = () =>
+            {
+                sb.AppendLine($"public class {className} : {baseCls}");
+                sb.AppendLine("{");
             sb.Append(BuildFieldsSection(fields, serializedMode));
-            if (!serializedMode) sb.Append(BuildAssignSection(fields, assignInAwake));
-            sb.AppendLine("}");
+                if (AutoUICodeGenSettings.Ensure().generateReadOnlyProperties)
+                    sb.Append(BuildReadOnlyPropertiesSection(fields));
+                if (!serializedMode) sb.Append(BuildInitMethodSection(fields));
+                sb.AppendLine("    // <user-code>");
+                sb.AppendLine("    // 你的手写逻辑请写在这里，生成器不会修改此区域");
+                sb.AppendLine("    // </user-code>");
+                sb.AppendLine("}");
+            };
+
+            if (!string.IsNullOrWhiteSpace(settings.wrapNamespace))
+            {
+                sb.AppendLine($"namespace {settings.wrapNamespace.Trim()}");
+                sb.AppendLine("{");
+                body();
+                sb.AppendLine("}");
+            }
+            else
+            {
+                body();
+            }
             return sb.ToString();
         }
 
@@ -400,30 +422,14 @@ namespace UnityUtils.EditorTools.AutoUI
         private const string FieldsEndMarker = "// </auto-fields>";
         private const string PropsStartMarker = "// <auto-props>";
         private const string PropsEndMarker = "// </auto-props>";
-        private const string AssignStartMarker = "// <auto-assign>";
-        private const string AssignEndMarker = "// </auto-assign>";
+    private const string AssignStartMarker = "// <auto-assign>";
+    private const string AssignEndMarker = "// </auto-assign>";
 
         private static string BuildFullFileWithMarkers(string className,
-            List<(string typeFullName, string name, string path, bool isComponent, int compIndex)> fields, bool assignInAwake, bool serializedMode)
+            List<(string typeFullName, string name, string path, bool isComponent, int compIndex)> fields,
+            bool serializedMode, AutoUICodeGenSettings settings)
         {
-            var sb = new StringBuilder();
-            sb.AppendLine("// 自动生成，请勿手改（可重复生成覆盖）");
-            sb.AppendLine("using UnityEngine;");
-            sb.AppendLine("using UnityEngine.UI;");
-            sb.AppendLine();
-            sb.AppendLine($"public class {className} : MonoBehaviour");
-            sb.AppendLine("{");
-            sb.Append(BuildFieldsSection(fields, serializedMode));
-            if (AutoUICodeGenSettings.Ensure().generateReadOnlyProperties)
-            {
-                sb.Append(BuildReadOnlyPropertiesSection(fields));
-            }
-            if (!serializedMode) sb.Append(BuildAssignSection(fields, assignInAwake));
-            sb.AppendLine("    // <user-code>");
-            sb.AppendLine("    // 你的手写逻辑请写在这里，生成器不会修改此区域");
-            sb.AppendLine("    // </user-code>");
-            sb.AppendLine("}");
-            return sb.ToString();
+            return BuildClassCode(className, fields, includeUsings: true, serializedMode: serializedMode, settings: settings);
         }
 
         private static string BuildFieldsSection(
@@ -458,13 +464,12 @@ namespace UnityUtils.EditorTools.AutoUI
             return sb.ToString();
         }
 
-        private static string BuildAssignSection(
-            List<(string typeFullName, string name, string path, bool isComponent, int compIndex)> fields, bool assignInAwake)
+        private static string BuildInitMethodSection(
+            List<(string typeFullName, string name, string path, bool isComponent, int compIndex)> fields)
         {
-            var method = assignInAwake ? "Awake" : "Start";
             var sb = new StringBuilder();
             sb.AppendLine("    " + AssignStartMarker);
-            sb.AppendLine($"    private void {method}()");
+            sb.AppendLine($"    public void InitRefs()");
             sb.AppendLine("    {");
             int __idx = 0;
             foreach (var f in fields)
@@ -530,7 +535,7 @@ namespace UnityUtils.EditorTools.AutoUI
             return sb.ToString();
         }
 
-        private static string UpsertSection(string source, string startMarker, string endMarker, string newSection)
+    private static string UpsertSection(string source, string startMarker, string endMarker, string newSection)
         {
             if (string.IsNullOrEmpty(source)) return newSection;
             var start = source.IndexOf(startMarker, StringComparison.Ordinal);
@@ -592,7 +597,34 @@ namespace UnityUtils.EditorTools.AutoUI
             return source + (suffixNeedsNl ? "\n" : string.Empty) + newSection;
         }
 
-        private static string ReplaceFirstClassName(string source, string newClassName)
+        // 在指定类体内插入/更新标记段，兼容命名空间包装
+        private static string UpsertSectionInClass(string source, string className, string startMarker, string endMarker, string newSection)
+        {
+            if (string.IsNullOrEmpty(source)) return newSection;
+            // 粗略定位 class 声明起点
+            var rx = new System.Text.RegularExpressions.Regex(@"\bclass\s+" + System.Text.RegularExpressions.Regex.Escape(className) + @"\b");
+            var m = rx.Match(source);
+            if (!m.Success) return UpsertSection(source, startMarker, endMarker, newSection);
+            int braceOpen = source.IndexOf('{', m.Index);
+            if (braceOpen < 0) return UpsertSection(source, startMarker, endMarker, newSection);
+            // 简单配对找到类的结束 '}'（不考虑嵌套类型）
+            int depth = 0; int i = braceOpen;
+            for (; i < source.Length; i++)
+            {
+                if (source[i] == '{') depth++;
+                else if (source[i] == '}') { depth--; if (depth == 0) { i++; break; } }
+            }
+            int classEnd = i;
+            var before = source.Substring(0, braceOpen + 1);
+            var body = source.Substring(braceOpen + 1, Math.Max(0, classEnd - (braceOpen + 1)));
+            var after = source.Substring(classEnd);
+
+            var updatedBody = UpsertSection(body, startMarker, endMarker, newSection);
+            if (ReferenceEquals(updatedBody, body)) return source; // 无变化
+            return before + updatedBody + after;
+        }
+
+        private static string ReplaceClassSignature(string source, string newClassName, AutoUICodeGenSettings settings)
         {
             if (string.IsNullOrEmpty(source)) return source;
             try
@@ -602,9 +634,35 @@ namespace UnityUtils.EditorTools.AutoUI
                 if (m.Success && m.Groups.Count > 1)
                 {
                     var oldName = m.Groups[1].Value;
+                    // 替换类名
                     var pattern = @"\bclass\s+" + System.Text.RegularExpressions.Regex.Escape(oldName) + @"\b";
                     var rx2 = new System.Text.RegularExpressions.Regex(pattern);
-                    return rx2.Replace(source, "class " + newClassName, 1);
+                    var replaced = rx2.Replace(source, "class " + newClassName, 1);
+
+                    // 替换或插入基类
+                    var baseCls = string.IsNullOrWhiteSpace(settings.baseClassFullName) ? "UnityEngine.MonoBehaviour" : settings.baseClassFullName.Trim();
+                    var afterClassIdx = replaced.IndexOf("class " + newClassName) + ("class " + newClassName).Length;
+                    // 查找 ':' 是否存在于 '{' 之前
+                    int braceIdx = replaced.IndexOf('{', afterClassIdx);
+                    if (braceIdx > 0)
+                    {
+                        int colonIdx = replaced.IndexOf(':', afterClassIdx);
+                        if (colonIdx < 0 || colonIdx > braceIdx)
+                        {
+                            replaced = replaced.Insert(afterClassIdx, " : " + baseCls);
+                        }
+                        else
+                        {
+                            // 已有继承，尝试替换第一个基类名为新的
+                            // 从 ':' 到 '{' 的区间
+                            var seg = replaced.Substring(colonIdx + 1, braceIdx - (colonIdx + 1));
+                            // 简单替换第一个标识符为 baseCls
+                            var segRx = new System.Text.RegularExpressions.Regex(@"^[^,{]+");
+                            replaced = replaced.Remove(colonIdx + 1, seg.Length)
+                                .Insert(colonIdx + 1, " " + baseCls + seg.Substring(segRx.Match(seg).Value.Length));
+                        }
+                    }
+                    return replaced;
                 }
             }
             catch { }

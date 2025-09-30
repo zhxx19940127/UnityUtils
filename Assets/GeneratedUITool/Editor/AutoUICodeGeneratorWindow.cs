@@ -11,11 +11,11 @@ namespace UnityUtils.EditorTools.AutoUI
         private AutoUICodeGenSettings _settings;
         private Vector2 _scroll;
         private readonly List<GameObject> _prefabList = new List<GameObject>();
-    private readonly List<bool> _selected = new List<bool>();
-    private const float StatusLabelWidth = 60f; // 单个状态标签宽度（三字）
-    private const float StatusAreaWidth = 200f; // 固定状态区域宽度，容纳3个状态与间距，避免按钮抖动
-    private const float LeftAreaWidth = 280f;   // 固定左侧 勾选框+预制体 对象区域宽度
-        private const float ItemButtonWidth = 56f;  // 条目右侧按钮统一宽度（两字）
+        private readonly List<bool> _selected = new List<bool>();
+        private const float StatusLabelWidth = 40f; // 单个状态标签宽度（三字）
+        private const float StatusAreaWidth = 10f; // 固定状态区域宽度，容纳3个状态与间距，避免按钮抖动
+        private const float LeftAreaWidth = 280f; // 固定左侧 勾选框+预制体 对象区域宽度
+        private const float ItemButtonWidth = 56f; // 条目右侧按钮统一宽度（两字）
         private bool _prefixMappingFoldout = false; // 组件前缀映射折叠，默认折叠
         private int _lastGenerateSuccess;
         private int _lastGenerateFail;
@@ -44,7 +44,9 @@ namespace UnityUtils.EditorTools.AutoUI
                     w.RefreshPrefabs();
                     w.Repaint();
                 }
-                catch { }
+                catch
+                {
+                }
             }
         }
 
@@ -126,9 +128,17 @@ namespace UnityUtils.EditorTools.AutoUI
             EditorGUILayout.PrefixLabel("生成设置");
             using (new EditorGUILayout.VerticalScope())
             {
-                _settings.initAssignMode = (AutoUICodeGenSettings.InitAssignMode)EditorGUILayout.EnumPopup(
-                    new GUIContent("生成与赋值方式", "选择在 Awake 查找、Start 查找，或使用序列化引用（仅生成 [SerializeField] 字段，编辑器赋值）"),
-                    _settings.initAssignMode);
+                // 仅两种：方法赋值（生成 InitRefs 供手动调用）/ 序列化引用
+                var modeChoices = new[] { "方法赋值", "序列化引用" };
+                int modeIndex = _settings.initAssignMode == AutoUICodeGenSettings.InitAssignMode.SerializedReferences
+                    ? 1
+                    : 0;
+                modeIndex = EditorGUILayout.Popup(
+                    new GUIContent("生成与赋值方式", "方法赋值：生成 InitRefs 方法，由你在合适时机调用；序列化引用：生成 [SerializeField] 并由编辑器赋值"),
+                    modeIndex, modeChoices);
+                _settings.initAssignMode = modeIndex == 1
+                    ? AutoUICodeGenSettings.InitAssignMode.SerializedReferences
+                    : AutoUICodeGenSettings.InitAssignMode.AwakeFind;
 
                 // 取消自动挂载选项：由用户手动触发挂载
 
@@ -189,12 +199,25 @@ namespace UnityUtils.EditorTools.AutoUI
                         }
                     }
                 }
+
+                EditorGUILayout.Space();
+                EditorGUILayout.LabelField("类包装", EditorStyles.boldLabel);
+                _settings.wrapNamespace = EditorGUILayout.TextField(new GUIContent("命名空间(可选)", "生成类外层的命名空间，留空则不使用"),
+                    _settings.wrapNamespace);
+                _settings.baseClassFullName = EditorGUILayout.TextField(
+                    new GUIContent("基类全名(可选)", "例如 MyGame.UI.BaseView；为空默认为 UnityEngine.MonoBehaviour"),
+                    _settings.baseClassFullName);
             }
 
 
             if (EditorGUI.EndChangeCheck()) SaveSettings();
 
             GUILayout.Space(10);
+        }
+
+        private void DrawPrefabList(bool expand = false)
+        {
+            EditorGUILayout.LabelField("预制体列表", EditorStyles.boldLabel);
             using (new EditorGUILayout.HorizontalScope())
             {
                 if (GUILayout.Button("刷新预制体列表", GUILayout.Width(140))) RefreshPrefabs();
@@ -207,18 +230,18 @@ namespace UnityUtils.EditorTools.AutoUI
                 GUILayout.FlexibleSpace();
                 //EditorGUILayout.HelpBox("可拖拽文件夹到窗口，快速设置路径并刷新。", MessageType.Info);
             }
-        }
 
-        private void DrawPrefabList(bool expand = false)
-        {
-            EditorGUILayout.LabelField("预制体列表", EditorStyles.boldLabel);
             using (new EditorGUILayout.HorizontalScope())
             {
-                _search = EditorGUILayout.TextField(_search, GUI.skin.FindStyle("ToolbarSeachTextField") ?? GUI.skin.textField);
-                _filterOnlyUngenerated = GUILayout.Toggle(_filterOnlyUngenerated, new GUIContent("只未生成"), GUILayout.Width(80));
-                _filterOnlyUnattached = GUILayout.Toggle(_filterOnlyUnattached, new GUIContent("只未挂载"), GUILayout.Width(80));
+                _search = EditorGUILayout.TextField(_search,
+                    GUI.skin.FindStyle("ToolbarSeachTextField") ?? GUI.skin.textField);
+                _filterOnlyUngenerated =
+                    GUILayout.Toggle(_filterOnlyUngenerated, new GUIContent("只未生成"), GUILayout.Width(80));
+                _filterOnlyUnattached =
+                    GUILayout.Toggle(_filterOnlyUnattached, new GUIContent("只未挂载"), GUILayout.Width(80));
                 _filterOnlyErrors = GUILayout.Toggle(_filterOnlyErrors, new GUIContent("只异常"), GUILayout.Width(80));
             }
+
             EditorGUILayout.BeginVertical("box", GUILayout.ExpandHeight(true));
             if (expand)
                 _scroll = EditorGUILayout.BeginScrollView(_scroll, GUILayout.ExpandHeight(true));
@@ -253,22 +276,39 @@ namespace UnityUtils.EditorTools.AutoUI
                         DrawStatusLabels(go);
                         GUILayout.FlexibleSpace();
                     }
+
                     GUILayout.Space(8);
 
                     // 右侧操作按钮
-                    if (!HasGeneratedScript(go))
+                    if (GUILayout.Button("生成", GUILayout.Width(ItemButtonWidth)))
                     {
-                        if (GUILayout.Button("生成", GUILayout.Width(ItemButtonWidth)))
+                        var res = UICodeGenerator.GenerateScript(go, _settings.scriptOutputFolder, _settings);
+                        if (res.assignStats != null)
                         {
-                            var res = UICodeGenerator.GenerateScript(go, _settings.scriptOutputFolder, _settings);
-                            if (res.assignStats != null)
-                            {
-                                var s = res.assignStats;
-                                _lastGenerateMessage = $"赋值: 成功 {s.success}/总 {s.total}，缺路径 {s.missingPath}，缺组件 {s.missingComponent}";
-                            }
-                            // 自动挂载已取消
+                            var s = res.assignStats;
+                            _lastGenerateMessage =
+                                $"赋值: 成功 {s.success}/总 {s.total}，缺路径 {s.missingPath}，缺组件 {s.missingComponent}";
                         }
+                        // // 生成后：自动挂载
+                        // var scriptPath = Path.Combine(_settings.scriptOutputFolder, go.name + ".cs").Replace("\\", "/");
+                        // // 序列化模式：生成挂载前收集字段，挂载后尝试赋值
+                        // List<(string typeFullName, string name, string path, bool isComponent, int compIndex)> fields = null;
+                        // bool doAssignAfter = _settings.initAssignMode == AutoUICodeGenSettings.InitAssignMode.SerializedReferences;
+                        // if (doAssignAfter)
+                        // {
+                        //     fields = UICodeGenerator.CollectFields(go, _settings);
+                        // }
+                        //
+                        // GeneratedScriptAttacher.EnqueueAttach(go, go.name, scriptPath);
+                        //
+                        // if (doAssignAfter)
+                        // {
+                        //     EditorApplication.delayCall += () => { TryAssignSerializedReferences(go, go.name, fields); };
+                        // }
+                        //
+                        // ShowNotification(new GUIContent("已生成并请求挂载"));
                     }
+
                     if (HasGeneratedScript(go) && !IsAttached(go))
                     {
                         if (GUILayout.Button("挂载", GUILayout.Width(ItemButtonWidth)))
@@ -276,10 +316,13 @@ namespace UnityUtils.EditorTools.AutoUI
                             MountOne(go);
                         }
                     }
+
                     if (HasGeneratedScript(go))
                     {
                         if (GUILayout.Button("打开", GUILayout.Width(ItemButtonWidth))) OpenScript(go);
+                        if (GUILayout.Button("删除", GUILayout.Width(ItemButtonWidth))) DeleteOne(go);
                     }
+
                     if (GUILayout.Button("检查", GUILayout.Width(ItemButtonWidth))) LogAttachDiagnostics(go);
                 }
             }
@@ -307,6 +350,7 @@ namespace UnityUtils.EditorTools.AutoUI
                 {
                     GenerateSelected();
                 }
+
                 GUILayout.Space(8);
                 if (GUILayout.Button("为所选已生成脚本的预制挂载脚本", GUILayout.Height(28)))
                 {
@@ -343,7 +387,8 @@ namespace UnityUtils.EditorTools.AutoUI
                 {
                     if (!(prefabAll || _selected[i])) continue;
                     var go = _prefabList[i];
-                    canceled = EditorUtility.DisplayCancelableProgressBar("批量生成 UI 脚本", go.name, total > 0 ? (float)done / total : 0f);
+                    canceled = EditorUtility.DisplayCancelableProgressBar("批量生成 UI 脚本", go.name,
+                        total > 0 ? (float)done / total : 0f);
                     if (canceled) break;
                     try
                     {
@@ -355,6 +400,7 @@ namespace UnityUtils.EditorTools.AutoUI
                             missingPath += res.assignStats.missingPath;
                             missingComp += res.assignStats.missingComponent;
                         }
+
                         _lastGenerateSuccess++;
                     }
                     catch (System.Exception ex)
@@ -444,8 +490,11 @@ namespace UnityUtils.EditorTools.AutoUI
                         }
                     }
                 }
-                catch { }
+                catch
+                {
+                }
             }
+
             return null;
         }
 
@@ -474,7 +523,8 @@ namespace UnityUtils.EditorTools.AutoUI
                 EditorUtility.DisplayProgressBar("生成UI代码", "开始...", 0f);
                 for (int i = 0; i < prefabs.Count; i++)
                 {
-                    var canceled = EditorUtility.DisplayCancelableProgressBar("生成UI代码", prefabs[i].name, (float)i / prefabs.Count);
+                    var canceled =
+                        EditorUtility.DisplayCancelableProgressBar("生成UI代码", prefabs[i].name, (float)i / prefabs.Count);
                     if (canceled) break;
                     UICodeGenerator.GenerateScript(prefabs[i], settings.scriptOutputFolder, settings);
                 }
@@ -496,12 +546,14 @@ namespace UnityUtils.EditorTools.AutoUI
                 EditorUtility.DisplayDialog("生成UI代码", "请在层级视图选择一个或多个预制体实例/Prefab 根节点", "确定");
                 return;
             }
+
             try
             {
                 EditorUtility.DisplayProgressBar("生成UI代码", "开始...", 0f);
                 for (int i = 0; i < selection.Length; i++)
                 {
-                    var canceled = EditorUtility.DisplayCancelableProgressBar("生成UI代码", selection[i].name, (float)i / selection.Length);
+                    var canceled = EditorUtility.DisplayCancelableProgressBar("生成UI代码", selection[i].name,
+                        (float)i / selection.Length);
                     if (canceled) break;
                     var prefab = PrefabUtility.GetCorrespondingObjectFromSource(selection[i]);
                     var go = prefab != null ? prefab : selection[i];
@@ -580,7 +632,8 @@ namespace UnityUtils.EditorTools.AutoUI
         {
             var green = new GUIStyle(EditorStyles.miniLabel) { normal = { textColor = new Color(0.2f, 0.7f, 0.2f) } };
             var red = new GUIStyle(EditorStyles.miniLabel) { normal = { textColor = new Color(0.9f, 0.3f, 0.3f) } };
-            var yellow = new GUIStyle(EditorStyles.miniLabel) { normal = { textColor = new Color(0.95f, 0.75f, 0.2f) } };
+            var yellow = new GUIStyle(EditorStyles.miniLabel)
+                { normal = { textColor = new Color(0.95f, 0.75f, 0.2f) } };
 
             // 1) 生成状态（始终显示）
             bool generated = HasGeneratedScript(go);
@@ -625,8 +678,10 @@ namespace UnityUtils.EditorTools.AutoUI
             {
                 return stats.total > 0 && stats.success < stats.total;
             }
+
             return false;
         }
+
         private static void LogAttachDiagnostics(GameObject go)
         {
             var settings = AutoUICodeGenSettings.Ensure();
@@ -649,18 +704,25 @@ namespace UnityUtils.EditorTools.AutoUI
                     EditorUtility.DisplayDialog("检查状态", "无法加载 Prefab 内容", "确定");
                     return;
                 }
+
                 var mbs = prefab.GetComponents<MonoBehaviour>();
                 sb.AppendLine($"组件数量: {mbs.Length}");
                 for (int i = 0; i < mbs.Length; i++)
                 {
                     var mb = mbs[i];
-                    if (mb == null) { sb.AppendLine($"#{i}: Missing Script"); continue; }
+                    if (mb == null)
+                    {
+                        sb.AppendLine($"#{i}: Missing Script");
+                        continue;
+                    }
+
                     var ms = MonoScript.FromMonoBehaviour(mb);
                     var msName = ms ? ms.name : "<null>";
                     sb.AppendLine($"#{i}: {mb.GetType().FullName} (脚本: {msName})");
                     if (expectedMs && ms == expectedMs) sb.AppendLine("  - 匹配: MonoScript 相同");
                     if (mb.GetType().Name == className) sb.AppendLine("  - 匹配: 类型短名相同");
                 }
+
                 EditorUtility.DisplayDialog("检查状态", sb.ToString(), "确定");
             }
             finally
@@ -691,6 +753,105 @@ namespace UnityUtils.EditorTools.AutoUI
             return abs;
         }
 
+        private void DeleteOne(GameObject go)
+        {
+            if (go == null) return;
+            var settings = AutoUICodeGenSettings.Ensure();
+            var prefabPath = AssetDatabase.GetAssetPath(go);
+            var guid = AssetDatabase.AssetPathToGUID(prefabPath);
+            var scriptPath = Path.Combine(settings.scriptOutputFolder ?? string.Empty, go.name + ".cs")
+                .Replace("\\", "/");
+
+            if (!EditorUtility.DisplayDialog("删除生成内容",
+                    $"将移除预制体上的脚本并删除脚本文件:\n{scriptPath}\n\n是否继续？", "确定", "取消"))
+            {
+                return;
+            }
+
+            // 1) 从 Prefab 移除组件
+            try
+            {
+                if (!string.IsNullOrEmpty(prefabPath))
+                {
+                    var prefab = PrefabUtility.LoadPrefabContents(prefabPath);
+                    if (prefab != null)
+                    {
+                        bool changed = false;
+                        // 通过 MonoScript 精确比对
+                        MonoScript expectedMs = null;
+                        if (!string.IsNullOrEmpty(scriptPath))
+                            expectedMs = AssetDatabase.LoadAssetAtPath<MonoScript>(scriptPath);
+
+                        var mbs = prefab.GetComponents<MonoBehaviour>();
+                        for (int i = mbs.Length - 1; i >= 0; i--)
+                        {
+                            var mb = mbs[i];
+                            if (mb == null) continue;
+                            bool match = false;
+                            if (expectedMs != null)
+                            {
+                                var ms = MonoScript.FromMonoBehaviour(mb);
+                                if (ms != null && ms == expectedMs) match = true;
+                            }
+
+                            // 兜底：按短名匹配
+                            if (!match && mb.GetType().Name == go.name) match = true;
+                            if (match)
+                            {
+                                DestroyImmediate(mb, true);
+                                changed = true;
+                            }
+                        }
+
+                        if (changed)
+                        {
+                            PrefabUtility.SaveAsPrefabAsset(prefab, prefabPath);
+                        }
+
+                        PrefabUtility.UnloadPrefabContents(prefab);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[AutoUI] 从预制移除组件失败: {ex.Message}");
+            }
+
+            // 2) 删除脚本文件
+            try
+            {
+                if (!string.IsNullOrEmpty(scriptPath) && AssetDatabase.LoadAssetAtPath<MonoScript>(scriptPath) != null)
+                {
+                    if (!AssetDatabase.DeleteAsset(scriptPath))
+                    {
+                        Debug.LogWarning($"[AutoUI] 删除脚本失败: {scriptPath}");
+                    }
+                    else
+                    {
+                        AssetDatabase.Refresh();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[AutoUI] 删除脚本文件失败: {ex.Message}");
+            }
+
+            // 3) 清空异常状态缓存
+            try
+            {
+                if (!string.IsNullOrEmpty(guid)) SerializedReferenceAssigner.ClearStatsForGuid(guid);
+            }
+            catch
+            {
+            }
+
+            // 4) 刷新界面
+            RefreshPrefabs();
+            Repaint();
+            ShowNotification(new GUIContent("已删除并移除挂载"));
+        }
+
         private void MountOne(GameObject go)
         {
             var settings = AutoUICodeGenSettings.Ensure();
@@ -714,10 +875,7 @@ namespace UnityUtils.EditorTools.AutoUI
             if (doAssignAfter)
             {
                 // 尝试立即赋值一次（若类型可用且已挂载），否则在脚本重载后窗口刷新再手动赋值
-                EditorApplication.delayCall += () =>
-                {
-                    TryAssignSerializedReferences(go, go.name, fields);
-                };
+                EditorApplication.delayCall += () => { TryAssignSerializedReferences(go, go.name, fields); };
             }
 
             ShowNotification(new GUIContent("已请求挂载，编译完成后会自动挂载"));
@@ -730,6 +888,7 @@ namespace UnityUtils.EditorTools.AutoUI
             {
                 if (_selected[i]) total++;
             }
+
             if (total == 0)
             {
                 ShowNotification(new GUIContent("请先选择预制体"));
@@ -746,12 +905,16 @@ namespace UnityUtils.EditorTools.AutoUI
                     if (!_selected[i]) continue;
                     var go = _prefabList[i];
                     var scriptPath = Path.Combine(settings.scriptOutputFolder, go.name + ".cs").Replace("\\", "/");
-                    var canceled = EditorUtility.DisplayCancelableProgressBar("挂载脚本", go.name, total > 0 ? (float)done / total : 0f);
+                    var canceled =
+                        EditorUtility.DisplayCancelableProgressBar("挂载脚本", go.name,
+                            total > 0 ? (float)done / total : 0f);
                     if (canceled) break;
                     if (File.Exists(scriptPath))
                     {
-                        List<(string typeFullName, string name, string path, bool isComponent, int compIndex)> fields = null;
-                        bool doAssignAfter = settings.initAssignMode == AutoUICodeGenSettings.InitAssignMode.SerializedReferences;
+                        List<(string typeFullName, string name, string path, bool isComponent, int compIndex)> fields =
+                            null;
+                        bool doAssignAfter = settings.initAssignMode ==
+                                             AutoUICodeGenSettings.InitAssignMode.SerializedReferences;
                         if (doAssignAfter)
                             fields = UICodeGenerator.CollectFields(go, settings);
 
@@ -765,6 +928,7 @@ namespace UnityUtils.EditorTools.AutoUI
                             };
                         }
                     }
+
                     done++;
                 }
             }
@@ -790,7 +954,8 @@ namespace UnityUtils.EditorTools.AutoUI
                     var stats = SerializedReferenceAssigner.Assign(prefab, className, fields);
                     if (stats != null)
                     {
-                        Debug.Log($"[AutoUI] 序列化引用赋值：成功 {stats.success}/{stats.total}，缺路径 {stats.missingPath}，缺组件 {stats.missingComponent}");
+                        Debug.Log(
+                            $"[AutoUI] 序列化引用赋值：成功 {stats.success}/{stats.total}，缺路径 {stats.missingPath}，缺组件 {stats.missingComponent}");
                     }
                 }
                 catch (Exception ex)

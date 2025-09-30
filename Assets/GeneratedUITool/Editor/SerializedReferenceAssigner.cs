@@ -34,7 +34,11 @@ namespace UnityUtils.EditorTools.AutoUI
             if (go == null) return stats;
             try
             {
-                var comp = go.GetComponent(className);
+                // 解析类型（支持命名空间包装）
+                var settings = AutoUICodeGenSettings.Ensure();
+                var fullName = string.IsNullOrWhiteSpace(settings.wrapNamespace) ? className : (settings.wrapNamespace + "." + className);
+                var compType = UICodeGenerator.UICodeGenerator_Internals.FindType(fullName) ?? UICodeGenerator.UICodeGenerator_Internals.FindType(className);
+                var comp = compType != null ? go.GetComponent(compType) : null;
                 if (comp == null)
                 {
                     // 如果类型还未编译可用或未挂载，直接返回（外层生成器有自动挂载流程）
@@ -113,6 +117,12 @@ namespace UnityUtils.EditorTools.AutoUI
         public static bool TryGetLastStatsByGuid(string prefabGuid, out AssignStats stats)
         {
             return s_lastStats.TryGetValue(prefabGuid, out stats);
+        }
+
+        public static void ClearStatsForGuid(string prefabGuid)
+        {
+            if (string.IsNullOrEmpty(prefabGuid)) return;
+            s_lastStats.Remove(prefabGuid);
         }
     }
 }
