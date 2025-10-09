@@ -425,10 +425,15 @@ namespace UnityUtils.EditorTools.AutoUI
 
         private static bool HasGeneratedScript(GameObject go)
         {
-            var settings = AutoUICodeGenSettings.Ensure();
-            if (string.IsNullOrEmpty(settings.scriptOutputFolder)) return false;
-            var path = Path.Combine(settings.scriptOutputFolder, go.name + ".cs").Replace("\\", "/");
-            return File.Exists(path);
+            if (go)
+            {
+                var settings = AutoUICodeGenSettings.Ensure();
+                if (string.IsNullOrEmpty(settings.scriptOutputFolder)) return false;
+                var path = Path.Combine(settings.scriptOutputFolder, go.name + ".cs").Replace("\\", "/");
+                return File.Exists(path);
+            }
+
+            return false;
         }
 
         private static bool IsAttached(GameObject go)
