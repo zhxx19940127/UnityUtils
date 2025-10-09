@@ -14,8 +14,7 @@ namespace UnityUtils.EditorTools.AutoUI
         public enum InitAssignMode
         {
             // 兼容旧值：AwakeFind/StartFind 均视为 方法赋值（生成 InitRefs 方法，由用户手动调用）
-            AwakeFind,
-            StartFind,
+            Find,
             SerializedReferences
         }
 
@@ -28,7 +27,7 @@ namespace UnityUtils.EditorTools.AutoUI
         public bool autoIncludeCommonControls = true;
 
     [Tooltip("初始化模式（方法赋值/序列化引用）。方法赋值：生成 InitRefs 方法，需手动调用；序列化引用：生成 [SerializeField] 并在编辑器赋值")]
-    public InitAssignMode initAssignMode = InitAssignMode.AwakeFind;
+    public InitAssignMode initAssignMode = InitAssignMode.Find;
 
         [Tooltip("类名是否强制以大写字母开头")] public bool requireUppercaseClassName = true;
 

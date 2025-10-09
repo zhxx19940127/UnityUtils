@@ -125,20 +125,24 @@ namespace UnityUtils.EditorTools.AutoUI
             }
 
             GUILayout.Space(10);
+
+
             EditorGUILayout.PrefixLabel("生成设置");
             using (new EditorGUILayout.VerticalScope())
             {
+                EditorGUILayout.HelpBox("生成前请确认赋值方式符合预期，存在脚本情况下更改赋值方式会导致错误！",
+                    MessageType.Warning);
                 // 仅两种：方法赋值（生成 InitRefs 供手动调用）/ 序列化引用
                 var modeChoices = new[] { "方法赋值", "序列化引用" };
                 int modeIndex = _settings.initAssignMode == AutoUICodeGenSettings.InitAssignMode.SerializedReferences
                     ? 1
                     : 0;
                 modeIndex = EditorGUILayout.Popup(
-                    new GUIContent("生成与赋值方式", "方法赋值：生成 InitRefs 方法，由你在合适时机调用；序列化引用：生成 [SerializeField] 并由编辑器赋值"),
+                    new GUIContent("字段赋值方式", "方法赋值：生成 InitRefs 方法，由你在合适时机调用；序列化引用：生成 [SerializeField] 并由编辑器赋值"),
                     modeIndex, modeChoices);
                 _settings.initAssignMode = modeIndex == 1
                     ? AutoUICodeGenSettings.InitAssignMode.SerializedReferences
-                    : AutoUICodeGenSettings.InitAssignMode.AwakeFind;
+                    : AutoUICodeGenSettings.InitAssignMode.Find;
 
                 // 取消自动挂载选项：由用户手动触发挂载
 
