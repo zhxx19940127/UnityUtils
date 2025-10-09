@@ -113,7 +113,7 @@ namespace UnityUtils.EditorTools.AutoUI
             }
 
             GUILayout.Space(10);
-            EditorGUILayout.PrefixLabel("包含组件");
+            EditorGUILayout.LabelField("包含组件", EditorStyles.boldLabel);
             using (new EditorGUILayout.VerticalScope())
             {
                 _settings.autoIncludeCommonControls = EditorGUILayout.ToggleLeft(
@@ -126,8 +126,7 @@ namespace UnityUtils.EditorTools.AutoUI
 
             GUILayout.Space(10);
 
-
-            EditorGUILayout.PrefixLabel("生成设置");
+            EditorGUILayout.LabelField("生成设置", EditorStyles.boldLabel);
             using (new EditorGUILayout.VerticalScope())
             {
                 EditorGUILayout.HelpBox("生成前请确认赋值方式符合预期，存在脚本情况下更改赋值方式会导致错误！",
