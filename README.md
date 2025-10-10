@@ -2,6 +2,9 @@
 
 UnityUtils 是一套面向 Unity 引擎开发者的高效实用工具集，旨在提升开发效率、规范项目结构、简化常见功能实现。项目包含大量常用静态工具方法、组件化设计、状态机、协程管理、事件系统等模块，适用于各类游戏及应用开发场景。
 
+## 上下文（Context ）
+- 用于管理应用程序中的全局对象和资源
+- 支持类型键和字符串键两种存储方式
 
 
 ## 自动 UI 代码生成工具（UnityUtils/GeneratedUITool）
@@ -14,7 +17,6 @@ UnityUtils 是一套面向 Unity 引擎开发者的高效实用工具集，旨�
 序列化引用：生成 [SerializeField] 字段并在编辑器中写引用（无需运行时查找）
 - 支持命名空间包装与自定义基类（默认 MonoBehaviour）
 - 统一的命名与属性生成：_camelCase、组件前缀映射、属性名去前缀（可选）
-
 
 
 ## 反射缓存工具（ReflectionToolkit）
@@ -89,6 +91,7 @@ Assets
   ├─ EventSystem/            # 事件系统相关
   ├─ StreamingAssetsLoader/  # 流式加载器相关
   ├─ ReflectionToolkit/      # 反射缓存工具
+  ├─ Context /               # 上下文管理
   └─ TimerManager/           # 计时器相关
 
 
