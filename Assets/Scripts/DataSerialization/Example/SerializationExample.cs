@@ -52,22 +52,16 @@ namespace DataSerialization
                     new PlayerData { playerName = "玩家C", level = 30 }
                 };
 
-                // 1. 使用自动格式检测
-                DemonstrateAutoDetection(playerData);
-
-                // 2. 使用指定格式序列化
+                // 1. 使用指定格式序列化
                 DemonstrateSpecificFormats(playerData);
 
-                // 3. 演示列表序列化
+                // 2. 演示列表序列化
                 DemonstrateListSerialization(playerList);
 
-                // 4. 演示文件操作
-                DemonstrateFileOperations(playerData);
-
-                // 5. 演示格式转换
+                // 3. 演示格式转换
                 DemonstrateFormatConversion(playerData);
 
-                // 6. 演示智能推荐
+                // 4. 演示智能推荐
                 DemonstrateSmartRecommendations();
             }
             catch (Exception ex)
@@ -78,29 +72,6 @@ namespace DataSerialization
             Debug.Log("=== 统一序列化系统演示结束 ===");
         }
 
-        void DemonstrateAutoDetection(PlayerData data)
-        {
-            Debug.Log("--- 1. 自动格式检测演示 ---");
-
-            // 根据文件扩展名自动选择格式
-            string jsonPath = Application.persistentDataPath + "/player.json";
-            string xmlPath = Application.persistentDataPath + "/player.xml";
-            string csvPath = Application.persistentDataPath + "/player.csv";
-
-            // 保存时自动检测格式
-            SerializationManager.SaveToFile(data, jsonPath);
-            SerializationManager.SaveToFile(data, xmlPath);
-            SerializationManager.SaveToFile(data, csvPath);
-
-            // 加载时自动检测格式
-            var jsonPlayer = SerializationManager.LoadFromFile<PlayerData>(jsonPath);
-            var xmlPlayer = SerializationManager.LoadFromFile<PlayerData>(xmlPath);
-            var csvPlayer = SerializationManager.LoadFromFile<PlayerData>(csvPath);
-
-            Debug.Log($"JSON加载: {jsonPlayer?.playerName}");
-            Debug.Log($"XML加载: {xmlPlayer?.playerName}");
-            Debug.Log($"CSV加载: {csvPlayer?.playerName}");
-        }
 
         void DemonstrateSpecificFormats(PlayerData data)
         {
@@ -121,7 +92,7 @@ namespace DataSerialization
             // 反序列化验证
             var fromJson = SerializationManager.Deserialize<PlayerData>(json, SerializationFormat.Json);
             var fromBinary = SerializationManager.DeserializeFromBytes<PlayerData>(binary, SerializationFormat.Binary);
-            
+
             Debug.Log($"JSON反序列化验证: {fromJson.playerName}");
             Debug.Log($"Binary反序列化验证: {fromBinary.playerName}");
         }
@@ -132,12 +103,14 @@ namespace DataSerialization
 
             // JSON 列表序列化
             string jsonList = SerializationManager.SerializeList(playerList, SerializationFormat.Json);
-            var deserializedJsonList = SerializationManager.DeserializeList<PlayerData>(jsonList, SerializationFormat.Json);
+            var deserializedJsonList =
+                SerializationManager.DeserializeList<PlayerData>(jsonList, SerializationFormat.Json);
             Debug.Log($"JSON列表: {deserializedJsonList.Count} 个玩家");
 
             // XML 列表序列化
             string xmlList = SerializationManager.SerializeList(playerList, SerializationFormat.Xml);
-            var deserializedXmlList = SerializationManager.DeserializeList<PlayerData>(xmlList, SerializationFormat.Xml);
+            var deserializedXmlList =
+                SerializationManager.DeserializeList<PlayerData>(xmlList, SerializationFormat.Xml);
             Debug.Log($"XML列表: {deserializedXmlList.Count} 个玩家");
 
             // CSV 列表序列化（使用简化数据，避免复杂类型）
@@ -159,25 +132,6 @@ namespace DataSerialization
             {
                 Debug.LogWarning($"CSV列表序列化跳过: {ex.Message}");
             }
-        }
-
-        void DemonstrateFileOperations(PlayerData data)
-        {
-            Debug.Log("--- 4. 文件操作演示 ---");
-
-            string basePath = Application.persistentDataPath + "/serialization_test";
-
-            // 使用不同格式保存到文件
-            SerializationManager.SaveToFile(data, basePath + ".json", SerializationFormat.Json);
-            SerializationManager.SaveToFile(data, basePath + ".xml", SerializationFormat.Xml);
-            SerializationManager.SaveToFile(data, basePath + ".dat", SerializationFormat.Binary);
-
-            // 从文件加载（自动检测格式）
-            var jsonData = SerializationManager.LoadFromFile<PlayerData>(basePath + ".json");
-            var xmlData = SerializationManager.LoadFromFile<PlayerData>(basePath + ".xml");
-            var binaryData = SerializationManager.LoadFromFile<PlayerData>(basePath + ".dat");
-
-            Debug.Log($"文件加载验证 - JSON: {jsonData?.level}, XML: {xmlData?.level}, Binary: {binaryData?.level}");
         }
 
         void DemonstrateFormatConversion(PlayerData data)
@@ -203,28 +157,35 @@ namespace DataSerialization
                 return;
             }
 
-            string xmlFromJson = SerializationManager.ConvertFormat<PlayerData>(jsonData, SerializationFormat.Json, SerializationFormat.Xml);
+            string xmlFromJson =
+                SerializationManager.ConvertFormat<PlayerData>(jsonData, SerializationFormat.Json,
+                    SerializationFormat.Xml);
             if (string.IsNullOrEmpty(xmlFromJson))
             {
                 Debug.LogError("JSON到XML转换失败");
                 return;
             }
+
             Debug.Log($"JSON转XML成功: {xmlFromJson.Contains("PlayerData")}");
 
             // XML 转 JSON
-            string jsonFromXml = SerializationManager.ConvertFormat<PlayerData>(xmlFromJson, SerializationFormat.Xml, SerializationFormat.Json);
+            string jsonFromXml =
+                SerializationManager.ConvertFormat<PlayerData>(xmlFromJson, SerializationFormat.Xml,
+                    SerializationFormat.Json);
             if (string.IsNullOrEmpty(jsonFromXml))
             {
                 Debug.LogError("XML到JSON转换失败");
                 return;
             }
+
             Debug.Log($"XML转JSON成功: {jsonFromXml.Contains("playerName")}");
 
             // Binary 转换测试
             string binaryData = SerializationManager.Serialize(testData, SerializationFormat.Binary);
             if (!string.IsNullOrEmpty(binaryData))
             {
-                string jsonFromBinary = SerializationManager.ConvertFormat<PlayerData>(binaryData, SerializationFormat.Binary, SerializationFormat.Json);
+                string jsonFromBinary = SerializationManager.ConvertFormat<PlayerData>(binaryData,
+                    SerializationFormat.Binary, SerializationFormat.Json);
                 Debug.Log($"Binary转JSON成功: {!string.IsNullOrEmpty(jsonFromBinary)}");
             }
 
@@ -234,7 +195,8 @@ namespace DataSerialization
                 string csvData = SerializationManager.Serialize(testData, SerializationFormat.Csv);
                 if (!string.IsNullOrEmpty(csvData))
                 {
-                    string jsonFromCsv = SerializationManager.ConvertFormat<PlayerData>(csvData, SerializationFormat.Csv, SerializationFormat.Json);
+                    string jsonFromCsv = SerializationManager.ConvertFormat<PlayerData>(csvData,
+                        SerializationFormat.Csv, SerializationFormat.Json);
                     Debug.Log($"CSV转JSON成功: {!string.IsNullOrEmpty(jsonFromCsv)}");
                 }
             }
@@ -290,7 +252,8 @@ namespace DataSerialization
         void OnDestroy()
         {
             // 清理测试文件
-            string[] testFiles = {
+            string[] testFiles =
+            {
                 Application.persistentDataPath + "/player.json",
                 Application.persistentDataPath + "/player.xml",
                 Application.persistentDataPath + "/player.csv",

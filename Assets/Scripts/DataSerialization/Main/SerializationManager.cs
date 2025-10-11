@@ -354,139 +354,14 @@ namespace DataSerialization
 
         #endregion
 
-        #region 文件操作
-
-        /// <summary>
-        /// 保存到文件（自动选择格式）
-        /// </summary>
-        public static bool SaveToFile(object obj, string filePath)
-        {
-            try
-            {
-                var strategy = GetStrategyByExtension(filePath);
-                return strategy.SaveToFile(obj, filePath);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"[SerializationManager] 保存文件失败: {ex.Message}");
-                return false;
-            }
-        }
-
-        /// <summary>
-        /// 保存到文件（指定格式）
-        /// </summary>
-        public static bool SaveToFile(object obj, string filePath, SerializationFormat format)
-        {
-            try
-            {
-                var strategy = GetStrategy(format);
-                return strategy.SaveToFile(obj, filePath);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"[SerializationManager] 保存文件失败 ({format}): {ex.Message}");
-                return false;
-            }
-        }
-
-        /// <summary>
-        /// 从文件加载（自动选择格式）
-        /// </summary>
-        public static T LoadFromFile<T>(string filePath) where T : new()
-        {
-            try
-            {
-                var strategy = GetStrategyByExtension(filePath);
-                return strategy.LoadFromFile<T>(filePath);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"[SerializationManager] 加载文件失败: {ex.Message}");
-                return default;
-            }
-        }
-
-        /// <summary>
-        /// 从文件加载（指定格式）
-        /// </summary>
-        public static T LoadFromFile<T>(string filePath, SerializationFormat format) where T : new()
-        {
-            try
-            {
-                var strategy = GetStrategy(format);
-                return strategy.LoadFromFile<T>(filePath);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"[SerializationManager] 加载文件失败 ({format}): {ex.Message}");
-                return default;
-            }
-        }
-
-        #endregion
-
-        #region Unity 路径集成
-
-        /// <summary>
-        /// 保存到 PersistentDataPath
-        /// </summary>
-        public static bool SaveToPersistentDataPath(object obj, string fileName, SerializationFormat format)
-        {
-            string filePath = Path.Combine(Application.persistentDataPath, fileName);
-            return SaveToFile(obj, filePath, format);
-        }
-
-        /// <summary>
-        /// 从 PersistentDataPath 加载
-        /// </summary>
-        public static T LoadFromPersistentDataPath<T>(string fileName, SerializationFormat format) where T : new()
-        {
-            string filePath = Path.Combine(Application.persistentDataPath, fileName);
-            return LoadFromFile<T>(filePath, format);
-        }
-
-        /// <summary>
-        /// 从 StreamingAssets 加载
-        /// </summary>
-        public static T LoadFromStreamingAssets<T>(string fileName, SerializationFormat format) where T : new()
-        {
-            string filePath = Path.Combine(Application.streamingAssetsPath, fileName);
-            return LoadFromFile<T>(filePath, format);
-        }
-
-        /// <summary>
-        /// 从 Resources 加载
-        /// </summary>
-        public static T LoadFromResources<T>(string resourcePath, SerializationFormat format) where T : new()
-        {
-            try
-            {
-                var textAsset = Resources.Load<TextAsset>(resourcePath);
-                if (textAsset == null)
-                {
-                    Debug.LogWarning($"[SerializationManager] Resources 中找不到文件: {resourcePath}");
-                    return default;
-                }
-
-                var strategy = GetStrategy(format);
-                return strategy.Deserialize<T>(textAsset.text);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"[SerializationManager] 从 Resources 加载失败: {ex.Message}");
-                return default;
-            }
-        }
-
-        #endregion
 
         #region 格式转换
 
         /// <summary>
         /// 格式转换
         /// </summary>
-        public static string ConvertFormat<T>(string data, SerializationFormat fromFormat, SerializationFormat toFormat) where T : new()
+        public static string ConvertFormat<T>(string data, SerializationFormat fromFormat, SerializationFormat toFormat)
+            where T : new()
         {
             try
             {
@@ -501,28 +376,6 @@ namespace DataSerialization
             {
                 Debug.LogError($"[SerializationManager] 格式转换失败 ({fromFormat} -> {toFormat}): {ex.Message}");
                 return string.Empty;
-            }
-        }
-
-        /// <summary>
-        /// 文件格式转换
-        /// </summary>
-        public static bool ConvertFile<T>(string inputPath, string outputPath) where T : new()
-        {
-            try
-            {
-                var inputStrategy = GetStrategyByExtension(inputPath);
-                var outputStrategy = GetStrategyByExtension(outputPath);
-
-                var data = inputStrategy.LoadFromFile<T>(inputPath);
-                if (data == null) return false;
-
-                return outputStrategy.SaveToFile(data, outputPath);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"[SerializationManager] 文件格式转换失败: {ex.Message}");
-                return false;
             }
         }
 
@@ -554,34 +407,8 @@ namespace DataSerialization
         public static string GetFormatInfo(SerializationFormat format)
         {
             var strategy = GetStrategy(format);
-            return $"{strategy.FormatName} - 扩展名: {string.Join(", ", strategy.SupportedExtensions)} - 压缩支持: {strategy.SupportsCompression}";
-        }
-
-        /// <summary>
-        /// 智能推荐格式
-        /// </summary>
-        public static SerializationFormat SmartRecommend<T>(T obj, string useCase = "")
-        {
-            var type = typeof(T);
-
-            // 根据用例推荐
-            switch (useCase.ToLower())
-            {
-                case "save":
-                case "archive":
-                    return SerializationFormat.Binary;
-                case "config":
-                case "settings":
-                    return SerializationFormat.Xml;
-                case "api":
-                case "network":
-                    return SerializationFormat.Json;
-                case "data":
-                case "table":
-                    return SerializationFormat.Csv;
-                default:
-                    return RecommendFormat(type);
-            }
+            return
+                $"{strategy.FormatName} - 扩展名: {string.Join(", ", strategy.SupportedExtensions)} - 压缩支持: {strategy.SupportsCompression}";
         }
 
         #endregion

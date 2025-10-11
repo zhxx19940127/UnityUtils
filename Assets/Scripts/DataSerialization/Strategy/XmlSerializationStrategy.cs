@@ -36,13 +36,13 @@ namespace DataSerialization
                 using (var stringWriter = new StringWriter())
                 {
                     using (var xmlWriter = XmlWriter.Create(stringWriter, new XmlWriterSettings
-                    {
-                        Encoding = DefaultEncoding,
-                        Indent = true,
-                        IndentChars = "  ",
-                        NewLineChars = "\n",
-                        NewLineHandling = NewLineHandling.Replace
-                    }))
+                           {
+                               Encoding = DefaultEncoding,
+                               Indent = true,
+                               IndentChars = "  ",
+                               NewLineChars = "\n",
+                               NewLineHandling = NewLineHandling.Replace
+                           }))
                     {
                         serializer.Serialize(xmlWriter, obj);
                         return stringWriter.ToString();
@@ -100,83 +100,6 @@ namespace DataSerialization
         public List<T> DeserializeList<T>(string data) where T : new()
         {
             return Deserialize<List<T>>(data);
-        }
-
-        public bool SaveToFile(object obj, string filePath)
-        {
-            if (obj == null)
-            {
-                Debug.LogWarning("[XmlSerializationStrategy] 保存对象为 null");
-                return false;
-            }
-
-            if (string.IsNullOrEmpty(filePath))
-            {
-                Debug.LogWarning("[XmlSerializationStrategy] 文件路径为空");
-                return false;
-            }
-
-            try
-            {
-                // 确保目录存在
-                string directory = Path.GetDirectoryName(filePath);
-                if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
-                {
-                    Directory.CreateDirectory(directory);
-                }
-
-                var serializer = new XmlSerializer(obj.GetType());
-                using (var streamWriter = new StreamWriter(filePath, false, DefaultEncoding))
-                {
-                    using (var xmlWriter = XmlWriter.Create(streamWriter, new XmlWriterSettings
-                    {
-                        Encoding = DefaultEncoding,
-                        Indent = true,
-                        IndentChars = "  ",
-                        NewLineChars = "\n"
-                    }))
-                    {
-                        serializer.Serialize(xmlWriter, obj);
-                    }
-                }
-
-                Debug.Log($"[XmlSerializationStrategy] XML 文件保存成功: {filePath}");
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"[XmlSerializationStrategy] 保存 XML 文件失败: {ex.Message}\n{ex.StackTrace}");
-                return false;
-            }
-        }
-
-        public T LoadFromFile<T>(string filePath) where T : new()
-        {
-            if (string.IsNullOrEmpty(filePath))
-            {
-                Debug.LogWarning("[XmlSerializationStrategy] 文件路径为空");
-                return default;
-            }
-
-            if (!File.Exists(filePath))
-            {
-                Debug.LogWarning($"[XmlSerializationStrategy] 文件不存在: {filePath}");
-                return default;
-            }
-
-            try
-            {
-                var serializer = new XmlSerializer(typeof(T));
-                using (var streamReader = new StreamReader(filePath, DefaultEncoding))
-                {
-                    return (T)serializer.Deserialize(streamReader);
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"[XmlSerializationStrategy] 加载 XML 文件失败: {ex.Message}\n{ex.StackTrace}");
-                return default;
-            }
         }
     }
 }

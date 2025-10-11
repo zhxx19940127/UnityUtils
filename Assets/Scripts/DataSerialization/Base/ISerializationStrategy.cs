@@ -49,15 +49,6 @@ namespace DataSerialization
         /// </summary>
         List<T> DeserializeList<T>(string data) where T : new();
 
-        /// <summary>
-        /// 保存到文件
-        /// </summary>
-        bool SaveToFile(object obj, string filePath);
-
-        /// <summary>
-        /// 从文件加载
-        /// </summary>
-        T LoadFromFile<T>(string filePath) where T : new();
 
         /// <summary>
         /// 支持的文件扩展名

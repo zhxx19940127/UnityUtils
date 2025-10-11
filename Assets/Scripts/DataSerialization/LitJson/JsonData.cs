@@ -1,3 +1,17 @@
+#region Header
+
+/**
+ * JsonData.cs
+ *   Generic type to hold JSON data (objects, arrays, and so on). This is
+ *   the default type returned by JsonMapper.ToObject().
+ *
+ * The authors disclaim copyright to this source code. For more details, see
+ * the COPYING file included with this distribution.
+ **/
+
+#endregion
+
+
 using System;
 using System.Collections;
 using System.Collections.Generic;
