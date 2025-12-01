@@ -3,6 +3,22 @@
 UnityUtils 是一套面向 Unity 引擎开发者的高效实用工具集，旨在提升开发效率、规范项目结构、简化常见功能实现。项目包含大量常用静态工具方法、组件化设计、状态机、协程管理、事件系统等模块，适用于各类游戏及应用开发场景。
 
 
+## AssetBundle 打包工具系统（AssetBundleTools）
+一个完整的 Unity AssetBundle 打包、加载和管理解决方案。系统提供可视化编辑器工具和高效运行时管理器，支持模型选择打包、智能共享资源处理、Shader 自动管理，专为 WebGL 平台优化。
+
+核心组件：
+- AssetBundleBuilderWindow：可视化打包面板（编辑器）
+- AssetBundleManager：运行时加载管理器（单例模式）
+- AssetBundleConfig：配置和路径管理
+主要特性：
+- 可视化操作：拖拽配置路径，无需写代码
+- 模型选择打包：支持单独选择部分模型构建，智能处理共享资源
+- Shader 自动管理：自动检测并添加到 Always Included Shaders，防止粉红色材质
+- WebGL 优化：并发控制、请求队列、路径适配
+- 依赖管理：自动处理 AB 包依赖关系，引用计数缓存
+- 配置持久化：所有设置自动保存到 EditorPrefs
+
+
 ## 数据序列化（DataSerialization ）
 一个基于策略模式、可扩展的 Unity 数据序列化框架。系统专注“数据格式转换”，彻底移除了文件读写能力，可与任意存储/网络层自由组合。
 - 支持格式：JSON / XML / Binary / CSV
