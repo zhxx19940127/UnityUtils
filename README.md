@@ -4,7 +4,8 @@ UnityUtils 是一套面向 Unity 引擎开发者的高效实用工具集，旨�
 
 
 ## AssetBundle 打包工具系统（AssetBundleTools）
-一个完整的 Unity AssetBundle 打包、加载和管理解决方案。系统提供可视化编辑器工具和高效运行时管理器，支持模型选择打包、智能共享资源处理、Shader 自动管理，专为 WebGL 平台优化。
+一个完整的 Unity AssetBundle 打包、加载和管理解决方案。系统提供可视化编辑器工具和高效运行时管理器，支持模型选择打包、智能共享资源处理、Shader 自动管理，专为 WebGL 平台优化。 
+功能相对简单,主要是为支持批量单模型打包和加载.
 
 核心组件：
 - AssetBundleBuilderWindow：可视化打包面板（编辑器）
