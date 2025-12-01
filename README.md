@@ -10,6 +10,7 @@ UnityUtils 是一套面向 Unity 引擎开发者的高效实用工具集，旨�
 - AssetBundleBuilderWindow：可视化打包面板（编辑器）
 - AssetBundleManager：运行时加载管理器（单例模式）
 - AssetBundleConfig：配置和路径管理
+
 主要特性：
 - 可视化操作：拖拽配置路径，无需写代码
 - 模型选择打包：支持单独选择部分模型构建，智能处理共享资源
