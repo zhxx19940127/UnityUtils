@@ -214,13 +214,7 @@ namespace UnityUtils.EditorTools.AutoUI
                 else
                     updated = UpsertSectionInClass(updated, className, PropsStartMarker, PropsEndMarker, string.Empty);
                 var assignSection = serializedMode ? string.Empty : BuildInitMethodSection(fields);
-                var beforeAssign = updated;
                 updated = UpsertSectionInClass(updated, className, AssignStartMarker, AssignEndMarker, assignSection);
-                if (string.IsNullOrEmpty(beforeAssign) || (beforeAssign.IndexOf(AssignStartMarker, StringComparison.Ordinal) < 0 && !string.IsNullOrEmpty(assignSection)))
-                {
-                    if (AutoUICodeGenSettings.Ensure().logMarkerRecovery)
-                        Debug.Log("[AutoUI] 检测到赋值标记段缺失，已自动恢复。");
-                }
 
                 if (!string.Equals(original, updated, StringComparison.Ordinal))
                 {
@@ -380,11 +374,15 @@ namespace UnityUtils.EditorTools.AutoUI
             bool includeUsings, bool serializedMode, AutoUICodeGenSettings settings)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("// 自动生成，请勿手改（可重复生成覆盖）");
             if (includeUsings)
             {
+                sb.AppendLine();
+                sb.AppendLine("#region 命名空间");
+                sb.AppendLine();
                 sb.AppendLine("using UnityEngine;");
                 sb.AppendLine("using UnityEngine.UI;");
+                sb.AppendLine();
+                sb.AppendLine("#endregion 命名空间");
                 sb.AppendLine();
             }
 
@@ -398,9 +396,12 @@ namespace UnityUtils.EditorTools.AutoUI
                 if (AutoUICodeGenSettings.Ensure().generateReadOnlyProperties)
                     sb.Append(BuildReadOnlyPropertiesSection(fields));
                 if (!serializedMode) sb.Append(BuildInitMethodSection(fields));
-                sb.AppendLine("    // <user-code>");
+                sb.AppendLine();
+                sb.AppendLine("    #region 自定义代码");
+                sb.AppendLine();
                 sb.AppendLine("    // 你的手写逻辑请写在这里，生成器不会修改此区域");
-                sb.AppendLine("    // </user-code>");
+                sb.AppendLine();
+                sb.AppendLine("    #endregion 自定义代码");
                 sb.AppendLine("}");
             };
 
@@ -418,12 +419,12 @@ namespace UnityUtils.EditorTools.AutoUI
             return sb.ToString();
         }
 
-        private const string FieldsStartMarker = "// <auto-fields>";
-        private const string FieldsEndMarker = "// </auto-fields>";
-        private const string PropsStartMarker = "// <auto-props>";
-        private const string PropsEndMarker = "// </auto-props>";
-    private const string AssignStartMarker = "// <auto-assign>";
-    private const string AssignEndMarker = "// </auto-assign>";
+        private const string FieldsStartMarker = "#region 字段";
+        private const string FieldsEndMarker = "#endregion 字段";
+        private const string PropsStartMarker = "#region 属性";
+        private const string PropsEndMarker = "#endregion 属性";
+        private const string AssignStartMarker = "#region InitRefs 方法";
+        private const string AssignEndMarker = "#endregion InitRefs 方法";
 
         private static string BuildFullFileWithMarkers(string className,
             List<(string typeFullName, string name, string path, bool isComponent, int compIndex)> fields,
@@ -437,11 +438,13 @@ namespace UnityUtils.EditorTools.AutoUI
         {
             var sb = new StringBuilder();
             sb.AppendLine("    " + FieldsStartMarker);
+            sb.AppendLine();
             foreach (var f in fields)
             {
                 var attr = serializedMode ? "[SerializeField] " : string.Empty;
                 sb.AppendLine($"    {attr}private {f.typeFullName} {f.name};");
             }
+            sb.AppendLine();
             sb.AppendLine("    " + FieldsEndMarker);
             return sb.ToString();
         }
@@ -450,6 +453,7 @@ namespace UnityUtils.EditorTools.AutoUI
         {
             var sb = new StringBuilder();
             sb.AppendLine("    " + PropsStartMarker);
+            sb.AppendLine();
             foreach (var f in fields)
             {
                 var baseName = f.name.TrimStart('_');
@@ -460,6 +464,7 @@ namespace UnityUtils.EditorTools.AutoUI
                 var propName = ToPascalCase(baseName);
                 sb.AppendLine($"    public {f.typeFullName} {propName} => {f.name};");
             }
+            sb.AppendLine();
             sb.AppendLine("    " + PropsEndMarker);
             return sb.ToString();
         }
@@ -469,7 +474,8 @@ namespace UnityUtils.EditorTools.AutoUI
         {
             var sb = new StringBuilder();
             sb.AppendLine("    " + AssignStartMarker);
-            sb.AppendLine($"    public void InitRefs()");
+            sb.AppendLine();
+            sb.AppendLine("    public void InitRefs()");
             sb.AppendLine("    {");
             int __idx = 0;
             foreach (var f in fields)
@@ -531,6 +537,7 @@ namespace UnityUtils.EditorTools.AutoUI
                 }
             }
             sb.AppendLine("    }");
+            sb.AppendLine();
             sb.AppendLine("    " + AssignEndMarker);
             return sb.ToString();
         }
@@ -538,63 +545,73 @@ namespace UnityUtils.EditorTools.AutoUI
     private static string UpsertSection(string source, string startMarker, string endMarker, string newSection)
         {
             if (string.IsNullOrEmpty(source)) return newSection;
+            
             var start = source.IndexOf(startMarker, StringComparison.Ordinal);
             var end = source.IndexOf(endMarker, StringComparison.Ordinal);
+            
+            // 找到了配对的 region，直接替换整个区域
             if (start >= 0 && end > start)
             {
                 int lineStart = source.LastIndexOf('\n', Math.Max(0, start - 1));
                 if (lineStart < 0) lineStart = 0; else lineStart += 1;
-                end += endMarker.Length;
-                int lineEnd = source.IndexOf('\n', end);
-                if (lineEnd >= 0) end = lineEnd + 1;
-                return source.Substring(0, lineStart) + newSection + source.Substring(end);
+                
+                int lineEnd = source.IndexOf('\n', end + endMarker.Length);
+                int replaceEnd = lineEnd >= 0 ? lineEnd + 1 : end + endMarker.Length;
+                
+                return source.Substring(0, lineStart) + newSection + source.Substring(replaceEnd);
             }
-
-            var openIdx = source.IndexOf('{');
-            var closeIdx = source.LastIndexOf('}');
-            if (openIdx >= 0)
+            
+            // 首次生成：根据 marker 类型确定插入位置
+            return InsertSectionByType(source, startMarker, newSection);
+        }
+        
+        private static string InsertSectionByType(string source, string startMarker, string newSection)
+        {
+            var classBodyStart = source.IndexOf('{');
+            var classBodyEnd = source.LastIndexOf('}');
+            
+            if (classBodyStart < 0) 
+                return source + "\n" + newSection;
+            
+            // 按顺序插入：字段 -> 属性 -> InitRefs -> 自定义代码
+            if (startMarker.Contains("字段"))
             {
-                if (startMarker == FieldsStartMarker)
-                {
-                    var insertPos = openIdx + 1;
-                    var needsNl = insertPos < source.Length && source[insertPos] != '\n';
-                    var payload = needsNl ? ("\n" + newSection) : newSection;
-                    return source.Insert(insertPos, payload);
-                }
-                else if (startMarker == PropsStartMarker)
-                {
-                    var fieldsEnd = source.IndexOf(FieldsEndMarker, StringComparison.Ordinal);
-                    if (fieldsEnd >= 0)
-                    {
-                        int insertPos = fieldsEnd + FieldsEndMarker.Length;
-                        var needsNl = insertPos < source.Length && source[insertPos] != '\n';
-                        var payload = needsNl ? ("\n" + newSection) : newSection;
-                        return source.Insert(insertPos, payload);
-                    }
-                    var assignStart = source.IndexOf(AssignStartMarker, StringComparison.Ordinal);
-                    if (assignStart >= 0)
-                    {
-                        var needsNl = assignStart > 0 && source[assignStart - 1] != '\n';
-                        var payload = needsNl ? ("\n" + newSection) : newSection;
-                        return source.Insert(assignStart, payload);
-                    }
-                    if (closeIdx > openIdx)
-                    {
-                        var needsNl = closeIdx > 0 && source[closeIdx - 1] != '\n';
-                        var payload = needsNl ? ("\n" + newSection) : newSection;
-                        return source.Insert(closeIdx, payload);
-                    }
-                }
-                else if (endMarker == AssignEndMarker && closeIdx > openIdx)
-                {
-                    var needsNl = closeIdx > 0 && source[closeIdx - 1] != '\n';
-                    var payload = needsNl ? ("\n" + newSection) : newSection;
-                    return source.Insert(closeIdx, payload);
-                }
+                // 字段：紧跟类的开头
+                return source.Insert(classBodyStart + 1, "\n" + newSection);
             }
-
-            var suffixNeedsNl = source.Length > 0 && source[source.Length - 1] != '\n';
-            return source + (suffixNeedsNl ? "\n" : string.Empty) + newSection;
+            else if (startMarker.Contains("属性"))
+            {
+                // 属性：字段之后
+                var fieldsEnd = source.IndexOf("#endregion 字段", StringComparison.Ordinal);
+                if (fieldsEnd >= 0)
+                {
+                    var insertPos = source.IndexOf('\n', fieldsEnd + "#endregion 字段".Length);
+                    return source.Insert(insertPos >= 0 ? insertPos + 1 : fieldsEnd + "#endregion 字段".Length, newSection);
+                }
+                return source.Insert(classBodyStart + 1, "\n" + newSection);
+            }
+            else if (startMarker.Contains("InitRefs"))
+            {
+                // InitRefs：属性之后，或字段之后，或类开头
+                var propsEnd = source.IndexOf("#endregion 属性", StringComparison.Ordinal);
+                if (propsEnd >= 0)
+                {
+                    var insertPos = source.IndexOf('\n', propsEnd + "#endregion 属性".Length);
+                    return source.Insert(insertPos >= 0 ? insertPos + 1 : propsEnd + "#endregion 属性".Length, newSection);
+                }
+                
+                var fieldsEnd = source.IndexOf("#endregion 字段", StringComparison.Ordinal);
+                if (fieldsEnd >= 0)
+                {
+                    var insertPos = source.IndexOf('\n', fieldsEnd + "#endregion 字段".Length);
+                    return source.Insert(insertPos >= 0 ? insertPos + 1 : fieldsEnd + "#endregion 字段".Length, newSection);
+                }
+                
+                return source.Insert(classBodyStart + 1, "\n" + newSection);
+            }
+            
+            // 其他：插入到类结束之前
+            return source.Insert(classBodyEnd, newSection);
         }
 
         // 在指定类体内插入/更新标记段，兼容命名空间包装

@@ -17,35 +17,13 @@ MonoBehaviour:
   autoIncludeCommonControls: 1
   initAssignMode: 0
   requireUppercaseClassName: 1
-  generateReadOnlyProperties: 1
+  generateReadOnlyProperties: 0
   privateFieldUnderscoreCamelCase: 1
   useComponentPrefixForFields: 1
   stripPrefixInPropertyNames: 1
   wrapNamespace: 
   baseClassFullName: UnityEngine.MonoBehaviour
   useSerializedReferences: 0
-  autoIncludeExtendedControls: 1
+  autoIncludeExtendedControls: 0
   logMarkerRecovery: 1
-  componentPrefixes:
-  - typeFullName: UnityEngine.UI.Button
-    prefix: btn
-  - typeFullName: UnityEngine.UI.Toggle
-    prefix: tog
-  - typeFullName: UnityEngine.UI.Slider
-    prefix: sld
-  - typeFullName: UnityEngine.UI.InputField
-    prefix: input
-  - typeFullName: UnityEngine.UI.Text
-    prefix: txt
-  - typeFullName: UnityEngine.UI.Image
-    prefix: img
-  - typeFullName: UnityEngine.UI.RawImage
-    prefix: img
-  - typeFullName: TMPro.TMP_InputField
-    prefix: input
-  - typeFullName: TMPro.TMP_Text
-    prefix: txt
-  - typeFullName: UnityEngine.RectTransform
-    prefix: rt
-  - typeFullName: UnityEngine.GameObject
-    prefix: go
+  componentPrefixes: []
